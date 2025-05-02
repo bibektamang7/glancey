@@ -13,3 +13,46 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum Interest {
+  TikTok
+  Video_Gaming
+  Travel
+  Gardening
+  Sports
+  Outdor_Activity
+  Arts_and_crafts
+  Cooking
+  Reading
+  Running
+  Technology
+  other
+}
+
+enum Professions {
+  Teacher
+  Doctor
+  Lawyer
+  Engineer
+  Software_Developer
+  Chief
+  Accountant
+  Art_Director
+  Dentist
+  Designer
+  Film_Maker
+  Photographer
+  Farmer
+  other
+}
+
+model User {
+  id         String      @id @unique @default(uuid())
+  name       String
+  email      String
+  image      String
+  interests  Interest[]  @map("other")
+  aboutMe    String
+  createdAt  DateTime    @default(now())
+  profession Professions
+}
