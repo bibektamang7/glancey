@@ -1,7 +1,13 @@
 //bun websocket
-Bun.serve({
+
+const server = Bun.serve({
+	port: 8080,
 	fetch(req, server) {
-		server.upgrade(req);
+		const success = server.upgrade(req);
+		if (success) {
+			return undefined;
+		}
+		return new Response("Hello world");
 	},
 	websocket: {
 		open() {},
@@ -10,3 +16,5 @@ Bun.serve({
 		perMessageDeflate: true,
 	},
 });
+
+console.log(`Listening on ${server.hostname}:${server.port}`);
