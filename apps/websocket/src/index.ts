@@ -33,6 +33,7 @@ const handleMessage = (
 			const socketUser = userManager.getUser(ws.data.user.id);
 			if (socketUser) {
 				socketUser.updateLocation(payload);
+				// TODO: SEND EVENT TO USER WHO IS AROUND / NEAR YOU
 			}
 			break;
 		case REQUEST_CHAT_MESSAGE:
@@ -51,6 +52,7 @@ const handleMessage = (
 								location: creatorSocket.getLocation(),
 								image: creatorSocket.getImage(),
 								interests: creatorSocket.getInterests(),
+								username: creatorSocket.username,
 							},
 						},
 					})
@@ -66,9 +68,13 @@ const handleMessage = (
 					JSON.stringify({
 						type: RECEIVE_MESSAGE_IN_CHAT,
 						payload: {
+							sender: {
+								id: senderUser.getUserId(),
+								image: senderUser.getImage(),
+								username: senderUser.username,
+							},
 							messageId: senderUserId,
 							content: payload.content,
-							sender: senderUserId,
 						},
 					}),
 					senderUserId
@@ -114,12 +120,84 @@ const handleMessage = (
 			}
 			break;
 		case LEAVE_CALL:
+			{
+				const senderUser = userManager.getUser(payload.sender);
+				const chat = chatManager.getChat(payload.chatId);
+
+				if (senderUser && chat) {
+					const socketUserId = senderUser.getUserId();
+					chat.removeParticipant(senderUser);
+					chat.broadcastMessage(
+						JSON.stringify({
+							type: LEAVE_CALL,
+							payload: {
+								leftBy: {
+									id: senderUser.getUserId(),
+									image: senderUser.getImage(),
+									username: senderUser.username,
+								},
+							},
+						}),
+						socketUserId
+					);
+				}
+			}
 			break;
 		case REQUEST_JOIN_CALL:
+			{
+				const senderUser = userManager.getUser(payload.requestBy);
+				const receiverUser = userManager.getUser(payload.requestTo);
+				if (senderUser && receiverUser) {
+					receiverUser.getSocket().send(
+						JSON.stringify({
+							type: REQUEST_JOIN_CALL,
+							payload: {
+								requestBy: {
+									id: senderUser.getUserId(),
+									image: senderUser.getImage(),
+									username: senderUser.username,
+								},
+							},
+						})
+					);
+				}
+			}
 			break;
 		case ACCEPT_JOIN_CALL:
+			{
+				const acceptedByUser = userManager.getUser(payload.acceptedBy);
+				const acceptedToUser = userManager.getUser(payload.acceptedTo);
+				const chat = chatManager.getChat(payload.chatId);
+				if (acceptedByUser && acceptedToUser && chat) {
+					const adminId = acceptedToUser.getUserId();
+					const chat = chatManager.createChat(adminId, acceptedToUser);
+					chat.addParticipant(acceptedByUser);
+
+					//TODO: MAKE MEDIASOUP CONNECTION LOGIC
+					// handle exchang webrtc ice candidates logic
+					// handle exchange remote and local description exchange with MEDIASOUP
+				}
+			}
 			break;
 		case REJECT_JOIN_CALL:
+			{
+				const rejectedBy = userManager.getUser(payload.rejectedBy);
+				const rejectedTo = userManager.getUser(payload.rejectedTo);
+				if (rejectedBy && rejectedTo) {
+					rejectedTo.getSocket().send(
+						JSON.stringify({
+							type: REJECT_JOIN_CALL,
+							payload: {
+								rejectedBy: {
+									id: rejectedBy.getUserId(),
+									username: rejectedBy.username,
+									iamge: rejectedBy.getImage(),
+								},
+							},
+						})
+					);
+				}
+			}
 			break;
 	}
 };
@@ -131,7 +209,8 @@ const websocketHandle: WebSocketHandler<SocketData> = {
 			ws,
 			ws.data.user.image,
 			ws.data.location,
-			ws.data.user.interests
+			ws.data.user.interests,
+			ws.data.user.username
 		);
 		userManager.addUser(socketUser);
 		console.log("Socket user created.");

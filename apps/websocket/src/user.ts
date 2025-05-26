@@ -5,6 +5,7 @@ import { chatManager } from "./chat";
 
 export interface TUser {
 	id: string;
+	username: string;
 	image: string;
 	interests: string[];
 }
@@ -17,6 +18,7 @@ interface UserLocation {
 export class User {
 	private userId: string;
 	private socket: ServerWebSocket<SocketData>;
+	public username: string;
 	private location: UserLocation;
 	private image: string;
 	public interests: string[];
@@ -26,13 +28,15 @@ export class User {
 		socket: ServerWebSocket<SocketData>,
 		image: string,
 		location: { longitude: number; latitude: number },
-		interests: string[]
+		interests: string[],
+		username: string
 	) {
 		this.userId = userId;
 		this.socket = socket;
 		this.location = location;
 		this.image = image;
 		this.interests = interests;
+		this.username = username;
 	}
 	getInterests() {
 		return this.interests;
