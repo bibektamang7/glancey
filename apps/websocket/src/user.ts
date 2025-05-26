@@ -1,15 +1,44 @@
 import type { ServerWebSocket, WebSocket } from "bun";
 import type { SocketData } from ".";
+import { redisClient } from "redis-config";
+import { chatManager } from "./chat";
+
+export interface TUser {
+	id: string;
+	image: string;
+	interests: string[];
+}
+
+interface UserLocation {
+	longitude: number;
+	latitude: number;
+}
 
 export class User {
 	private userId: string;
 	private socket: ServerWebSocket<SocketData>;
-	private longitude?: number;
-	private latitude?: number;
+	private location: UserLocation;
+	private image: string;
+	public interests: string[];
 
-	constructor(userId: string, socket: ServerWebSocket<SocketData>) {
+	constructor(
+		userId: string,
+		socket: ServerWebSocket<SocketData>,
+		image: string,
+		location: { longitude: number; latitude: number },
+		interests: string[]
+	) {
 		this.userId = userId;
 		this.socket = socket;
+		this.location = location;
+		this.image = image;
+		this.interests = interests;
+	}
+	getInterests() {
+		return this.interests;
+	}
+	getImage() {
+		return this.image;
 	}
 	getUserId() {
 		return this.userId;
@@ -18,17 +47,22 @@ export class User {
 	getSocket() {
 		return this.socket;
 	}
-	getLongitude() {
-		return this.longitude;
+	getLocation() {
+		return this.location;
 	}
-	getLatitude() {
-		return this.latitude;
-	}
-	setLongitude(longitude: number) {
-		this.longitude = longitude;
-	}
-	setLatitude(latitude: number) {
-		this.latitude = latitude;
+	async updateLocation(location: UserLocation) {
+		this.location = location;
+		try {
+			await redisClient.zrem("users:location", `user:${this.userId}`);
+			await redisClient.geoadd(
+				"users:location",
+				location.longitude,
+				location.latitude,
+				`user: ${this.userId}`
+			);
+		} catch (error) {
+			console.log("Couldn't update location of user", error);
+		}
 	}
 }
 
@@ -45,15 +79,40 @@ class UserManager {
 		UserManager.instance = new UserManager();
 		return UserManager.instance;
 	}
-	setUser(user: User) {
+	async addUser(user: User) {
 		this.onlineUsers.add(user);
+		//TODO:
+		const location = user.getLocation();
+		const userId = user.getUserId();
+		// TODO: FUTURE UPDATES
+		// RETRY MECHANISM IF FAILED TO ADD USER
+		try {
+			await redisClient.geoadd(
+				`users:location`,
+				location.longitude,
+				location.latitude,
+				`user:${userId}`
+			);
+		} catch (error) {
+			console.log("couldn't add user in redis", error);
+		}
 	}
-	getUser(userId: string) {
+	getUser(userId: string): User | null {
 		this.onlineUsers.forEach((user) => {
 			const id = user.getUserId();
 			if (userId === id) return user;
 		});
 		return null;
+	}
+	async removeUser(user: User) {
+		this.onlineUsers.delete(user);
+		const userId = user.getUserId();
+		try {
+			await redisClient.zrem("users:location", `user:${userId}`);
+		} catch (error) {
+			console.log("Failed to remove user from redis", error);
+		}
+		//TODO: REMOVE FROM REDIS AS WELL
 	}
 }
 
