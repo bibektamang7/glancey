@@ -5,7 +5,7 @@ import type {
 	Transport,
 } from "mediasoup/types";
 
-const createConsumer = async (
+export const createConsumer = async (
 	router: Router,
 	producer: Producer,
 	rtpCapabilities: RtpCapabilities,
@@ -26,7 +26,6 @@ const createConsumer = async (
 			rtpCapabilities,
 			paused: producer.kind === "video",
 		});
-
 		return consumer;
 	} catch (error) {
 		console.error("consume failed: ", error);
