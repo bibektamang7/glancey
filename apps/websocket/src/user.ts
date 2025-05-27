@@ -1,7 +1,13 @@
-import type { ServerWebSocket, WebSocket } from "bun";
+import { redis, type ServerWebSocket, type WebSocket } from "bun";
 import type { SocketData } from ".";
-import { redisClient } from "redis-config";
+import { createClient } from "redis-config";
 import { chatManager } from "./chat";
+
+const redisClient = createClient();
+
+(async () => {
+	await redisClient.on("error", (err) => {}).connect();
+})();
 
 export interface TUser {
 	id: string;
@@ -57,13 +63,12 @@ export class User {
 	async updateLocation(location: UserLocation) {
 		this.location = location;
 		try {
-			await redisClient.zrem("users:location", `user:${this.userId}`);
-			await redisClient.geoadd(
-				"users:location",
-				location.longitude,
-				location.latitude,
-				`user: ${this.userId}`
-			);
+			await redisClient.zRem("users:location", `user:${this.userId}`);
+			await redisClient.geoAdd("users:location", {
+				longitude: location.longitude,
+				latitude: location.latitude,
+				member: `user: ${this.userId}`,
+			});
 		} catch (error) {
 			console.log("Couldn't update location of user", error);
 		}
@@ -91,12 +96,11 @@ class UserManager {
 		// TODO: FUTURE UPDATES
 		// RETRY MECHANISM IF FAILED TO ADD USER
 		try {
-			await redisClient.geoadd(
-				`users:location`,
-				location.longitude,
-				location.latitude,
-				`user:${userId}`
-			);
+			await redisClient.geoAdd(`users:location`, {
+				longitude: location.longitude,
+				latitude: location.latitude,
+				member: `user:${userId}`,
+			});
 		} catch (error) {
 			console.log("couldn't add user in redis", error);
 		}
@@ -112,7 +116,7 @@ class UserManager {
 		this.onlineUsers.delete(user);
 		const userId = user.getUserId();
 		try {
-			await redisClient.zrem("users:location", `user:${userId}`);
+			await redisClient.zRem("users:location", `user:${userId}`);
 		} catch (error) {
 			console.log("Failed to remove user from redis", error);
 		}
