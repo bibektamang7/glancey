@@ -275,21 +275,38 @@ export const handleMessage = async (
 			break;
 		}
 		case CONNECT_CONSUMER_TRANSPORT: {
-			const senderUser = userManager.getUser(payload.userId);
-			socketPubClient.publish(
-				"mediasoup:connectConsumerTransport",
-				JSON.stringify({})
-			);
+			if (senderUser) {
+				await socketPubClient.publish(
+					"mediasoup:connectConsumerTransport",
+					JSON.stringify({
+						userId: senderUser.userId,
+						params: payload.dtlsParameters,
+					})
+				);
+			}
 			break;
 		}
 		case CONNECT_CONSUMER: {
-			const senderUser = userManager.getUser(payload.userId);
-			socketPubClient.publish("mediasoup:consume", JSON.stringify({}));
+			if (senderUser) {
+				await socketPubClient.publish(
+					"mediasoup:consume",
+					JSON.stringify({
+						userId: senderUser.userId,
+						rtpCapabilities: payload.rtpCapabilites,
+					})
+				);
+			}
 			break;
 		}
 		case RESUME_TRANSPORT: {
-			const senderUser = userManager.getUser(payload.userId);
-			socketPubClient.publish("mediasoup:resume", JSON.stringify({}));
+			if (senderUser) {
+				await socketPubClient.publish(
+					"mediasoup:resume",
+					JSON.stringify({
+						userId: senderUser.userId,
+					})
+				);
+			}
 			break;
 		}
 	}

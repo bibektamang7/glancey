@@ -22,7 +22,7 @@ interface UserLocation {
 }
 
 export class User {
-	private userId: string;
+	public userId: string;
 	private socket: ServerWebSocket<SocketData>;
 	public username: string;
 	private location: UserLocation;
