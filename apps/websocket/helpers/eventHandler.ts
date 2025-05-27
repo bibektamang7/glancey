@@ -40,31 +40,30 @@ export const handleMessage = async (
 ) => {
 	const parsedMessage = JSON.parse(String(message));
 	const payload = parsedMessage.payload;
+	const senderUser = userManager.getUser(payload.sender);
 	switch (parsedMessage.type) {
 		case MOVEMENT:
-			const socketUser = userManager.getUser(ws.data.user.id);
-			if (socketUser) {
-				socketUser.updateLocation(payload);
+			if (senderUser) {
+				senderUser.updateLocation(payload);
 				// TODO: SEND EVENT TO USER WHO IS AROUND / NEAR YOU
 			}
 			break;
 		case REQUEST_CHAT_MESSAGE:
-			const creatorSocket = userManager.getUser(payload.requestBy);
 			const requestedSocket = userManager.getUser(payload.requestTo);
-			if (creatorSocket && requestedSocket) {
-				const userId = creatorSocket.getUserId();
-				const chat = chatManager.createChat(userId, creatorSocket);
+			if (senderUser && requestedSocket) {
+				const userId = senderUser.getUserId();
+				const chat = chatManager.createChat(userId, senderUser);
 				chat.addParticipant(requestedSocket);
 				requestedSocket.getSocket().send(
 					JSON.stringify({
 						type: REQUEST_CHAT_MESSAGE,
 						payload: {
 							requestBy: {
-								id: creatorSocket.getUserId(),
-								location: creatorSocket.getLocation(),
-								image: creatorSocket.getImage(),
-								interests: creatorSocket.getInterests(),
-								username: creatorSocket.username,
+								id: senderUser.getUserId(),
+								location: senderUser.getLocation(),
+								image: senderUser.getImage(),
+								interests: senderUser.getInterests(),
+								username: senderUser.username,
 							},
 						},
 					})
@@ -72,7 +71,6 @@ export const handleMessage = async (
 			}
 			break;
 		case SEND_MESSAGE_IN_CHAT: {
-			const senderUser = userManager.getUser(payload.sender);
 			const chat = chatManager.getChat(payload.chatId);
 			if (senderUser && chat) {
 				const senderUserId = senderUser.getUserId();
@@ -95,7 +93,6 @@ export const handleMessage = async (
 			break;
 		}
 		case DELETE_MESSAGE_FROM_CHAT: {
-			const senderUser = userManager.getUser(payload.sender);
 			const chat = chatManager.getChat(payload.chatId);
 			if (chat && senderUser) {
 				const senderUserId = senderUser.getUserId();
@@ -112,7 +109,6 @@ export const handleMessage = async (
 			break;
 		}
 		case REMOVE_USER_FROM_CHAT:
-			const senderUser = userManager.getUser(payload.sender);
 			const chat = chatManager.getChat(payload.chatId);
 			if (senderUser && chat) {
 				const senderId = senderUser.getUserId();
@@ -133,7 +129,6 @@ export const handleMessage = async (
 			break;
 		case LEAVE_CALL:
 			{
-				const senderUser = userManager.getUser(payload.sender);
 				const chat = chatManager.getChat(payload.chatId);
 
 				if (senderUser && chat) {
@@ -177,13 +172,12 @@ export const handleMessage = async (
 			break;
 		case ACCEPT_JOIN_CALL:
 			{
-				const acceptedByUser = userManager.getUser(payload.acceptedBy);
 				const acceptedToUser = userManager.getUser(payload.acceptedTo);
 				const chat = chatManager.getChat(payload.chatId);
-				if (acceptedByUser && acceptedToUser && chat) {
+				if (senderUser && acceptedToUser && chat) {
 					const adminId = acceptedToUser.getUserId();
 					const chat = chatManager.createChat(adminId, acceptedToUser);
-					chat.addParticipant(acceptedByUser);
+					chat.addParticipant(senderUser);
 
 					//TODO: MAKE MEDIASOUP CONNECTION LOGIC
 					// handle exchang webrtc ice candidates logic
@@ -193,17 +187,16 @@ export const handleMessage = async (
 			break;
 		case REJECT_JOIN_CALL:
 			{
-				const rejectedBy = userManager.getUser(payload.rejectedBy);
 				const rejectedTo = userManager.getUser(payload.rejectedTo);
-				if (rejectedBy && rejectedTo) {
+				if (senderUser && rejectedTo) {
 					rejectedTo.getSocket().send(
 						JSON.stringify({
 							type: REJECT_JOIN_CALL,
 							payload: {
 								rejectedBy: {
-									id: rejectedBy.getUserId(),
-									username: rejectedBy.username,
-									iamge: rejectedBy.getImage(),
+									id: senderUser.getUserId(),
+									username: senderUser.username,
+									iamge: senderUser.getImage(),
 								},
 							},
 						})
@@ -212,7 +205,6 @@ export const handleMessage = async (
 			}
 			break;
 		case GET_ROUTER_RTP_CAPABILITIES: {
-			const senderUser = userManager.getUser(payload.sender);
 			if (senderUser) {
 				const senderUserId = senderUser.getUserId();
 
@@ -225,32 +217,65 @@ export const handleMessage = async (
 		}
 		case CREATE_PRODUCER_TRANSPORT: {
 			// send rtp capabilities comes from client
-			socketPubClient.publish(
-				"mediasoup:createProducerTransport",
-				JSON.stringify({})
-			);
+			const senderUser = userManager.getUser(payload.userId);
+			if (senderUser) {
+				await socketPubClient.publish(
+					"mediasoup:createProducerTransport",
+					JSON.stringify({
+						rtpCapabilities: payload.rtpCapabilities,
+						userId: senderUser.userId,
+					})
+				);
+			}
 			break;
 		}
 		case CONNECT_PRODUCER_TRANSPORT: {
 			// send dtlsParameters comes from client
-			socketPubClient.publish(
-				"mediasoup:connectProducerTransport",
-				JSON.stringify({})
-			);
+
+			const senderUser = userManager.getUser(payload.userId);
+			if (senderUser) {
+				await socketPubClient.publish(
+					"mediasoup:connectProducerTransport",
+					JSON.stringify({
+						userId: senderUser.userId,
+						dtlsParameters: payload.dtlsParameters,
+					})
+				);
+			}
 			break;
 		}
 		case CONNECT_PRODUCER: {
-			socketPubClient.publish("mediasoup:produce", JSON.stringify({}));
+			const senderUser = userManager.getUser(payload.userId);
+			const chat = chatManager.getChat(payload.chatId);
+			if (senderUser && chat) {
+				await socketPubClient.publish(
+					"mediasoup:produce",
+					JSON.stringify({
+						userId: senderUser.userId,
+						chatId: chat.chatId,
+						kind: payload.kind,
+						rtpParameters: payload.rtpParameters,
+					})
+				);
+			}
 			break;
 		}
 		case CREATE_CONSUMER_TRANSPORT: {
-			socketPubClient.publish(
-				"mediasoup:createConsumerTransport",
-				JSON.stringify({})
-			);
+			const senderUser = userManager.getUser(payload.userId);
+			if (senderUser) {
+				// TODO: NOT SURE NOW,
+				// SEND RTPCAPABILITIIES
+				await socketPubClient.publish(
+					"mediasoup:createConsumerTransport",
+					JSON.stringify({
+						userId: senderUser.userId,
+					})
+				);
+			}
 			break;
 		}
 		case CONNECT_CONSUMER_TRANSPORT: {
+			const senderUser = userManager.getUser(payload.userId);
 			socketPubClient.publish(
 				"mediasoup:connectConsumerTransport",
 				JSON.stringify({})
@@ -258,10 +283,12 @@ export const handleMessage = async (
 			break;
 		}
 		case CONNECT_CONSUMER: {
+			const senderUser = userManager.getUser(payload.userId);
 			socketPubClient.publish("mediasoup:consume", JSON.stringify({}));
 			break;
 		}
 		case RESUME_TRANSPORT: {
+			const senderUser = userManager.getUser(payload.userId);
 			socketPubClient.publish("mediasoup:resume", JSON.stringify({}));
 			break;
 		}
