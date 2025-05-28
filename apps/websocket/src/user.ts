@@ -1,12 +1,15 @@
-import { redis, type ServerWebSocket, type WebSocket } from "bun";
+import type { ServerWebSocket } from "bun";
 import type { SocketData } from ".";
 import { createClient } from "redis-config";
-import { chatManager } from "./chat";
 
 const redisClient = createClient();
 
 (async () => {
-	await redisClient.on("error", (err) => {}).connect();
+	await redisClient
+		.on("error", (err) => {
+			console.error("Failed to connect redis client", err);
+		})
+		.connect();
 })();
 
 export interface TUser {
@@ -67,10 +70,31 @@ export class User {
 			await redisClient.geoAdd("users:location", {
 				longitude: location.longitude,
 				latitude: location.latitude,
-				member: `user: ${this.userId}`,
+				member: `user:${this.userId}`,
+			});
+			const members = await redisClient.geoSearch(
+				"users:location",
+				{ latitude: location.latitude, longitude: location.longitude },
+				{ radius: 10, unit: "km" }
+			);
+			//TODO: ASSUMING members HOLDS MEMBER VALUE STORED ON GEO_ADD
+			members.forEach((member) => {
+				const userId = member.split(":")[1];
+				console.log(userId, "this is online user in redius something");
+				if (userId) {
+					const socketUser = userManager.getUser(userId);
+					if (socketUser) {
+						socketUser.getSocket().send(
+							JSON.stringify({
+								type: "",
+								payload: {},
+							})
+						);
+					}
+				}
 			});
 		} catch (error) {
-			console.log("Couldn't update location of user", error);
+			console.error("Couldn't update location of user", error);
 		}
 	}
 }

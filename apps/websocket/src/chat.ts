@@ -1,14 +1,23 @@
 import { User } from "./user";
 
-class Chat {
+export class Chat {
 	public chatId: string;
 	public admin: User;
 	private participants: Set<User>;
+	public currentParticipantsInCall: Set<User>;
 	constructor(chatId: string, admin: User) {
 		this.chatId = chatId;
 		this.admin = admin;
 		this.participants = new Set();
+		this.currentParticipantsInCall = new Set();
 	}
+	addParticipantInCall(user: User) {
+		this.currentParticipantsInCall.add(user);
+	}
+	removeParticipantFromCall(user: User) {
+		this.currentParticipantsInCall.delete(user);
+	}
+
 	addParticipant(user: User) {
 		this.participants.add(user);
 	}

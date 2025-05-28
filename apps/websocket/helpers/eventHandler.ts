@@ -1,5 +1,6 @@
 import {
 	ACCEPT_JOIN_CALL,
+	ACCEPT_START_CALL,
 	CONNECT_CONSUMER,
 	CONNECT_CONSUMER_TRANSPORT,
 	CONNECT_PRODUCER,
@@ -8,20 +9,28 @@ import {
 	CREATE_PRODUCER_TRANSPORT,
 	DELETE_MESSAGE_FROM_CHAT,
 	GET_ROUTER_RTP_CAPABILITIES,
+	INCOMING_CALL,
+	INCOMING_CALL_ACCEPTED,
+	INCOMING_CALL_JOIN_ACCEPTED,
+	INCOMING_CALL_JOIN_REQUEST,
+	INCOMING_CALL_REJECTED,
 	LEAVE_CALL,
 	MOVEMENT,
 	RECEIVE_MESSAGE_IN_CHAT,
+	REJECT_INCOMING_CALL_JOIN_REQUEST,
 	REJECT_JOIN_CALL,
+	REJECT_START_CALL,
 	REMOVE_USER_FROM_CHAT,
 	REMOVED_FROM_CHAT,
 	REQUEST_CHAT_MESSAGE,
 	REQUEST_JOIN_CALL,
+	REQUEST_START_CALL,
 	RESUME_TRANSPORT,
 	SEND_MESSAGE_IN_CHAT,
 } from "../src/constants";
 import type { SocketData } from "../src";
 import { userManager } from "../src/user";
-import { chatManager } from "../src/chat";
+import { Chat, chatManager } from "../src/chat";
 import { createClient } from "redis-config";
 
 const socketPubClient = createClient();
@@ -109,21 +118,25 @@ export const handleMessage = async (
 			break;
 		}
 		case REMOVE_USER_FROM_CHAT:
-			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
-				const senderId = senderUser.getUserId();
-				if (senderId === chat.chatId) {
-					const requestUser = userManager.getUser(payload.requestRemoveUserId);
-					chatManager.removeUserFromChat(requestUser!);
-					requestUser?.getSocket().send(
-						JSON.stringify({
-							type: REMOVED_FROM_CHAT,
-							payload: {
-								chatId: chat.chatId,
-							},
-						})
-					);
-					// TODO: REMOVE USER IF IN MEDIASOUP
+			{
+				const chat = chatManager.getChat(payload.chatId);
+				if (senderUser && chat) {
+					const senderId = senderUser.getUserId();
+					if (senderId === chat.chatId) {
+						const requestUser = userManager.getUser(
+							payload.requestRemoveUserId
+						);
+						chatManager.removeUserFromChat(requestUser!);
+						requestUser?.getSocket().send(
+							JSON.stringify({
+								type: REMOVED_FROM_CHAT,
+								payload: {
+									chatId: chat.chatId,
+								},
+							})
+						);
+						// TODO: REMOVE USER IF IN MEDIASOUP
+					}
 				}
 			}
 			break;
@@ -150,9 +163,30 @@ export const handleMessage = async (
 				}
 			}
 			break;
-		case REQUEST_JOIN_CALL:
+		case REQUEST_START_CALL:
 			{
-				const senderUser = userManager.getUser(payload.requestBy);
+				if (payload.chatId && senderUser) {
+					const chat = chatManager.getChat(payload.chatId);
+					if (chat) {
+						chat.addParticipantInCall(senderUser);
+						chat.broadcastMessage(
+							JSON.stringify({
+								type: INCOMING_CALL,
+								payload: {
+									chatId: chat.chatId,
+									requestBy: {
+										id: senderUser.getUserId(),
+										image: senderUser.getImage(),
+										username: senderUser.username,
+									},
+								},
+							}),
+							senderUser.userId
+						);
+					}
+					break;
+				}
+
 				const receiverUser = userManager.getUser(payload.requestTo);
 				if (senderUser && receiverUser) {
 					receiverUser.getSocket().send(
@@ -170,18 +204,118 @@ export const handleMessage = async (
 				}
 			}
 			break;
-		case ACCEPT_JOIN_CALL:
+		case ACCEPT_START_CALL:
 			{
 				const acceptedToUser = userManager.getUser(payload.acceptedTo);
-				const chat = chatManager.getChat(payload.chatId);
-				if (senderUser && acceptedToUser && chat) {
+				if (senderUser && acceptedToUser) {
 					const adminId = acceptedToUser.getUserId();
-					const chat = chatManager.createChat(adminId, acceptedToUser);
-					chat.addParticipant(senderUser);
+					let chat: Chat | undefined;
+					if (payload.chatId) {
+						chat = chatManager.getChat(payload.chatId);
+						chat?.addParticipantInCall(senderUser);
+					}
+					chat = chatManager.createChat(adminId, acceptedToUser);
 
-					//TODO: MAKE MEDIASOUP CONNECTION LOGIC
-					// handle exchang webrtc ice candidates logic
-					// handle exchange remote and local description exchange with MEDIASOUP
+					// add paricipants in chat's space
+					chat.addParticipant(senderUser);
+					chat.addParticipant(acceptedToUser);
+
+					// add paricipants in chat's call
+					chat.addParticipantInCall(senderUser);
+					chat.addParticipantInCall(acceptedToUser);
+
+					acceptedToUser.getSocket().send(
+						JSON.stringify({
+							type: INCOMING_CALL_ACCEPTED,
+							payload: {
+								chatId: chat.chatId,
+								acceptedBy: {
+									userId: senderUser.userId,
+									image: senderUser.getImage(),
+									username: senderUser.username,
+								},
+							},
+						})
+					);
+
+					await socketPubClient.publish(
+						"mediasoup:getRouterRtpCapabilities",
+						JSON.stringify({
+							chatId: chat.chatId,
+							userId: senderUser.userId,
+						})
+					);
+				}
+			}
+			break;
+		case REJECT_START_CALL:
+			{
+				const rejectedTo = userManager.getUser(payload.rejectedTo);
+				if (senderUser && rejectedTo) {
+					rejectedTo.getSocket().send(
+						JSON.stringify({
+							type: INCOMING_CALL_REJECTED,
+							payload: {
+								rejectedBy: {
+									id: senderUser.getUserId(),
+									username: senderUser.username,
+									image: senderUser.getImage(),
+								},
+							},
+						})
+					);
+				}
+			}
+			break;
+		case REQUEST_JOIN_CALL:
+			{
+				const chat = chatManager.getChat(payload.chatId);
+				if (senderUser && chat) {
+					const chatAdmin = chat.admin;
+					chatAdmin.getSocket().send(
+						JSON.stringify({
+							type: INCOMING_CALL_JOIN_REQUEST,
+							payload: {
+								id: senderUser.getUserId(),
+								username: senderUser.username,
+								image: senderUser.getImage(),
+							},
+						})
+					);
+				}
+			}
+			break;
+		case ACCEPT_JOIN_CALL:
+			{
+				const acceptedTo = userManager.getUser(payload.acceptedTo);
+				const chat = chatManager.getChat(payload.chatId);
+				if (senderUser && chat && acceptedTo) {
+					chat.addParticipantInCall(acceptedTo);
+					// TODO: may be some delay here,
+					// to notify users in call
+					// TODO: I don't think i should notify user now
+					// Notify user when user produce the mediasoup
+
+					await socketPubClient.publish(
+						"mediasoup:getRouterRtpCapabilities",
+						JSON.stringify({
+							userId: acceptedTo.userId,
+							chatId: chat.chatId,
+						})
+					);
+
+					acceptedTo.getSocket().send(
+						JSON.stringify({
+							type: INCOMING_CALL_JOIN_ACCEPTED,
+							payload: {
+								chatId: chat.chatId,
+							},
+						})
+					);
+
+					// chat.currentParticipantsInCall.forEach((participant) => {
+					// 	participant.getSocket().send(JSON.stringify({}));
+					// });
 				}
 			}
 			break;
@@ -191,10 +325,9 @@ export const handleMessage = async (
 				if (senderUser && rejectedTo) {
 					rejectedTo.getSocket().send(
 						JSON.stringify({
-							type: REJECT_JOIN_CALL,
+							type: REJECT_INCOMING_CALL_JOIN_REQUEST,
 							payload: {
 								rejectedBy: {
-									id: senderUser.getUserId(),
 									username: senderUser.username,
 									iamge: senderUser.getImage(),
 								},
@@ -205,25 +338,27 @@ export const handleMessage = async (
 			}
 			break;
 		case GET_ROUTER_RTP_CAPABILITIES: {
-			if (senderUser) {
+			const chat = chatManager.getChat(payload.chatId);
+			if (senderUser && chat) {
 				const senderUserId = senderUser.getUserId();
 
 				await socketPubClient.publish(
 					"mediasoup:getRouterRtpCapabilities",
-					JSON.stringify({ userId: senderUserId })
+					JSON.stringify({ userId: senderUserId, chatId: chat.chatId })
 				);
 			}
 			break;
 		}
 		case CREATE_PRODUCER_TRANSPORT: {
 			// send rtp capabilities comes from client
-			const senderUser = userManager.getUser(payload.userId);
-			if (senderUser) {
+			const chat = chatManager.getChat(payload.chatId);
+			if (senderUser && chat) {
 				await socketPubClient.publish(
 					"mediasoup:createProducerTransport",
 					JSON.stringify({
 						rtpCapabilities: payload.rtpCapabilities,
 						userId: senderUser.userId,
+						chatId: chat.chatId,
 					})
 				);
 			}
@@ -232,20 +367,21 @@ export const handleMessage = async (
 		case CONNECT_PRODUCER_TRANSPORT: {
 			// send dtlsParameters comes from client
 
+			const chat = chatManager.getChat(payload.chatId);
 			const senderUser = userManager.getUser(payload.userId);
-			if (senderUser) {
+			if (senderUser && chat) {
 				await socketPubClient.publish(
 					"mediasoup:connectProducerTransport",
 					JSON.stringify({
 						userId: senderUser.userId,
 						dtlsParameters: payload.dtlsParameters,
+						chatId: chat.chatId,
 					})
 				);
 			}
 			break;
 		}
 		case CONNECT_PRODUCER: {
-			const senderUser = userManager.getUser(payload.userId);
 			const chat = chatManager.getChat(payload.chatId);
 			if (senderUser && chat) {
 				await socketPubClient.publish(
@@ -255,55 +391,67 @@ export const handleMessage = async (
 						chatId: chat.chatId,
 						kind: payload.kind,
 						rtpParameters: payload.rtpParameters,
+						transportId: payload.transportId,
 					})
 				);
 			}
 			break;
 		}
 		case CREATE_CONSUMER_TRANSPORT: {
-			const senderUser = userManager.getUser(payload.userId);
-			if (senderUser) {
+			const chat = chatManager.getChat(payload.chatId);
+			if (senderUser && chat) {
 				// TODO: NOT SURE NOW,
 				// SEND RTPCAPABILITIIES
 				await socketPubClient.publish(
 					"mediasoup:createConsumerTransport",
 					JSON.stringify({
 						userId: senderUser.userId,
+						chatId: chat.chatId,
 					})
 				);
 			}
 			break;
 		}
 		case CONNECT_CONSUMER_TRANSPORT: {
-			if (senderUser) {
+			const chat = chatManager.getChat(payload.chatId);
+			if (senderUser && chat) {
 				await socketPubClient.publish(
 					"mediasoup:connectConsumerTransport",
 					JSON.stringify({
 						userId: senderUser.userId,
 						params: payload.dtlsParameters,
+						chatId: chat.chatId,
+						transportId: payload.transportId,
 					})
 				);
 			}
 			break;
 		}
 		case CONNECT_CONSUMER: {
-			if (senderUser) {
+			const chat = chatManager.getChat(payload.chatId);
+			if (senderUser && chat) {
 				await socketPubClient.publish(
 					"mediasoup:consume",
 					JSON.stringify({
+						chatId: chat.chatId,
 						userId: senderUser.userId,
 						rtpCapabilities: payload.rtpCapabilites,
+						transportId: payload.transportId,
+						producerId: payload.producerId,
 					})
 				);
 			}
 			break;
 		}
 		case RESUME_TRANSPORT: {
-			if (senderUser) {
+			const chat = chatManager.getChat(payload.chatId);
+			if (senderUser && chat) {
 				await socketPubClient.publish(
 					"mediasoup:resume",
 					JSON.stringify({
 						userId: senderUser.userId,
+						chatId: chat.chatId,
+						consumerId: payload.consumerId,
 					})
 				);
 			}

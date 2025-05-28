@@ -5,7 +5,11 @@ import { chatManager } from "./chat";
 const socketSubClient = createClient();
 
 (async () => {
-	await socketSubClient.on("error", (err) => {}).connect();
+	await socketSubClient
+		.on("error", (err) => {
+			console.error("Failed to connect socket subscribe conneciton", err);
+		})
+		.connect();
 })();
 
 socketSubClient.subscribe("mediasoup:rtpCapabilities", (message) => {
@@ -14,8 +18,9 @@ socketSubClient.subscribe("mediasoup:rtpCapabilities", (message) => {
 	if (senderUser) {
 		senderUser.getSocket().send(
 			JSON.stringify({
-				type: "",
+				type: "rtpCapabilities",
 				payload: {
+					chatId: messageFromMediaSoup.chatId,
 					rtpCapabilities: messageFromMediaSoup.routerCapabilities,
 				},
 			})
@@ -31,8 +36,8 @@ socketSubClient.subscribe(
 		if (senderUser) {
 			senderUser.getSocket().send(
 				JSON.stringify({
-					type: "",
-					payload: { ...parsedData.params },
+					type: "producer_transport_created",
+					payload: { ...parsedData.params, chatId: parsedData.chatId },
 				})
 			);
 		}
@@ -48,6 +53,7 @@ socketSubClient.subscribe("mediasoup:producerConnected", async (message) => {
 				type: "",
 				payload: {
 					message: parsedData.message,
+					chatId: parsedData.chatId,
 				},
 			})
 		);
@@ -62,7 +68,7 @@ socketSubClient.subscribe("mediasoup:produced", async (message) => {
 	if (socketUser && chat) {
 		chat.broadcastMessage(
 			JSON.stringify({
-				type: "",
+				type: "produced_media",
 				payload: {
 					//TODO: MIGHT NEED TO SEND USER WHOLE DATA
 					// CONSIDER IT AGAIN,
@@ -89,9 +95,10 @@ socketSubClient.subscribe(
 		if (socketUser) {
 			socketUser.getSocket().send(
 				JSON.stringify({
-					type: "",
+					type: "consumer_transport_created",
 					payload: {
 						params: parsedData.params,
+						chatId: parsedData.chatId,
 					},
 				})
 			);
@@ -106,9 +113,10 @@ socketSubClient.subscribe("mediasoup:subConnected", async (message) => {
 	if (socketUser) {
 		socketUser.getSocket().send(
 			JSON.stringify({
-				type: "",
+				type: "consumer_transport_connected",
 				payload: {
 					message: parsedData.message,
+					chatId: parsedData.chatId,
 				},
 			})
 		);
@@ -122,9 +130,10 @@ socketSubClient.subscribe("mediasoup:subscribed", async (message) => {
 	if (socketUser) {
 		socketUser.getSocket().send(
 			JSON.stringify({
-				type: "",
+				type: "subscribed",
 				payload: {
 					params: parsedData.params,
+					chatId: parsedData.chatId,
 				},
 			})
 		);
@@ -138,7 +147,7 @@ socketSubClient.subscribe("mediasoup:resumed", async (message) => {
 	if (socketUser) {
 		socketUser.getSocket().send(
 			JSON.stringify({
-				type: "",
+				type: "resumed",
 				payload: {
 					message: parsedData.message,
 				},
@@ -154,7 +163,7 @@ socketSubClient.subscribe("mediasoup:error", async (message) => {
 	if (socketUser) {
 		socketUser.getSocket().send(
 			JSON.stringify({
-				type: "",
+				type: "error_on_media",
 				payload: {
 					message: parsedData.message,
 				},
