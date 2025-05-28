@@ -31,6 +31,7 @@
 	transport.on('connect', async ({dtlsParameters}, callback, errback) => {
 		const message = {
 			'type': 'connectProducerTransport',
+			transportId: event.payload.id,
 			dtlsParameters
 		}	
 		cosnt resp = JSON.stringfy(message)

@@ -6,7 +6,7 @@ export class Peer {
 	producers: Map<string, mediasoup.types.Producer>;
 	consumers: Map<string, mediasoup.types.Consumer>;
 
-	constructor(id: string, socket: any) {
+	constructor(id: string) {
 		this.id = id;
 		this.transports = new Map();
 		this.producers = new Map();
@@ -16,13 +16,22 @@ export class Peer {
 	addTransport(transport: mediasoup.types.Transport) {
 		this.transports.set(transport.id, transport);
 	}
+	getTransport(transportId: string) {
+		return this.transports.get(transportId);
+	}
 
 	addProducer(producer: mediasoup.types.Producer) {
 		this.producers.set(producer.id, producer);
 	}
+	getProducer(producerId: string) {
+		return this.producers.get(producerId);
+	}
 
 	addConsumer(consumer: mediasoup.types.Consumer) {
 		this.consumers.set(consumer.id, consumer);
+	}
+	getConsumer(consumerId: string) {
+		return this.consumers.get(consumerId);
 	}
 
 	removeTransport(transportId: string) {
