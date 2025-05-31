@@ -1,10 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-	MapContainer,
-	TileLayer,
-	Marker,
-	useMapEvents,
-} from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMapEvents, Popup } from "react-leaflet";
 import L, { LatLngExpression, LatLngLiteral } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
@@ -56,7 +51,7 @@ export const Map: React.FC<MapProps> = memo(({ center, locations }) => {
 					textAlign: "center",
 				}}
 			>
-				Move the map to position the marker at your pickup location
+				Move the map to position the marker at desire location
 			</div>
 			<MapContainer
 				center={center}
@@ -68,7 +63,7 @@ export const Map: React.FC<MapProps> = memo(({ center, locations }) => {
 				doubleClickZoom={false}
 			>
 				<TileLayer url={getUrl()} />
-				<IndriverCenterMarker
+				<CustomMarker
 					center={center}
 					color="#FF6B35"
 				/>
@@ -77,14 +72,13 @@ export const Map: React.FC<MapProps> = memo(({ center, locations }) => {
 	);
 });
 
-
-function IndriverCenterMarker({
+const CustomMarker = ({
 	color = "#FF6B35",
 	center,
 }: {
 	color: string;
 	center: LatLngLiteral;
-}) {
+}) => {
 	const [position, setPosition] = useState<LatLngExpression>([
 		center.lat,
 		center.lng,
@@ -141,9 +135,11 @@ function IndriverCenterMarker({
 			position={position}
 			icon={initialIcon}
 			zIndexOffset={1000}
-		/>
+		>
+			<Popup className="">This is popup to display user info</Popup>
+		</Marker>
 	);
-}
+};
 
 // <div style={{ display: "flex", marginTop: "10px", gap: "20px" }}>
 // 	<button onClick={() => setMapType("roadmap")}>roadmap</button>
