@@ -430,7 +430,8 @@ const Hero = () => {
 		target: globeTriggerRef,
 		offset: ["start start", "end end"],
 	});
-	const value = useTransform(globeScrollYProgress, [0, 1], [300, 50]);
+	const value = useTransform(globeScrollYProgress, [0, 1], [300, 0]);
+
 	const z = useSpring(value, {
 		stiffness: 200,
 		damping: 60,
@@ -439,12 +440,25 @@ const Hero = () => {
 		restSpeed: 0.01,
 		restDelta: 0.001,
 	});
-
-	const globeX = useTransform(globeScrollYProgress, [0, 0.2], ["0%", "50%"]);
+	const globeRight = useTransform(
+		globeScrollYProgress,
+		[0, 0.01, 0.5],
+		["0px", "0px", "50%"]
+	);
+	const globeLeft = useTransform(
+		globeScrollYProgress,
+		[0, 0.01, 0.5],
+		["25%", "50%", "0px"]
+	);
 	const globeWidth = useTransform(
 		globeScrollYProgress,
-		[0, 1],
-		["50%", "100%"]
+		[0, 0.01, 0.5],
+		["50%", "50%", "100%"]
+	);
+	const finalSectionOpacity = useTransform(
+		globeScrollYProgress,
+		[0.7, 1],
+		[0, 1]
 	);
 
 	const [globeProgress, setGlobeProgress] = useState(0);
@@ -468,8 +482,8 @@ const Hero = () => {
 			>
 				{/* Globe */}
 				<motion.div
-					style={{ right: globeX, width: globeWidth }}
-					className="fixed  top-0 w-1/2 h-screen hidden lg:block"
+					style={{ right: globeRight, width: globeWidth, left: globeLeft }}
+					className="fixed right-0 top-0 !w-full h-screen hidden lg:block"
 				>
 					<World
 						globeConfig={globeConfig}
@@ -698,52 +712,53 @@ const Hero = () => {
 				className="h-[300vh]"
 			></div>
 			{/* Show after finish */}
-			<div>
-				<motion.section className="min-h-screen flex items-center justify-center px-6 lg:px-12">
-					<div className="max-w-2xl text-center">
-						<h2 className="text-4xl lg:text-6xl font-bold text-white mb-6">
-							Ready to
-							<span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400">
-								{" "}
-								Connect?
-							</span>
-						</h2>
-						<p className="text-xl text-gray-300 mb-8">
-							Join thousands of users already connecting with their local
-							communities. Start building meaningful relationships today.
-						</p>
-						<div className="flex flex-col sm:flex-row gap-4 justify-center">
-							<Button
-								size="lg"
-								className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-12 py-4 text-lg"
-							>
-								Download App
-							</Button>
-							<Button
-								size="lg"
-								variant="outline"
-								className="border-gray-600 text-gray-300 hover:bg-gray-800 px-12 py-4 text-lg"
-							>
-								View Demo
-							</Button>
+			<motion.section
+				style={{ opacity: finalSectionOpacity }}
+				className="min-h-screen flex items-center justify-center px-6 lg:px-12"
+			>
+				<div className="max-w-2xl text-center">
+					<h2 className="text-4xl lg:text-6xl font-bold text-white mb-6">
+						Ready to
+						<span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400">
+							{" "}
+							Connect?
+						</span>
+					</h2>
+					<p className="text-xl text-gray-300 mb-8">
+						Join thousands of users already connecting with their local
+						communities. Start building meaningful relationships today.
+					</p>
+					<div className="flex flex-col sm:flex-row gap-4 justify-center">
+						<Button
+							size="lg"
+							className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-12 py-4 text-lg"
+						>
+							Download App
+						</Button>
+						<Button
+							size="lg"
+							variant="outline"
+							className="border-gray-600 text-gray-300 hover:bg-gray-800 px-12 py-4 text-lg"
+						>
+							View Demo
+						</Button>
+					</div>
+					<div className="mt-12 grid grid-cols-3 gap-8 text-center">
+						<div>
+							<div className="text-3xl font-bold text-white">50K+</div>
+							<div className="text-gray-400">Active Users</div>
 						</div>
-						<div className="mt-12 grid grid-cols-3 gap-8 text-center">
-							<div>
-								<div className="text-3xl font-bold text-white">50K+</div>
-								<div className="text-gray-400">Active Users</div>
-							</div>
-							<div>
-								<div className="text-3xl font-bold text-white">100+</div>
-								<div className="text-gray-400">Cities</div>
-							</div>
-							<div>
-								<div className="text-3xl font-bold text-white">1M+</div>
-								<div className="text-gray-400">Connections Made</div>
-							</div>
+						<div>
+							<div className="text-3xl font-bold text-white">100+</div>
+							<div className="text-gray-400">Cities</div>
+						</div>
+						<div>
+							<div className="text-3xl font-bold text-white">1M+</div>
+							<div className="text-gray-400">Connections Made</div>
 						</div>
 					</div>
-				</motion.section>
-			</div>
+				</div>
+			</motion.section>
 		</>
 	);
 };
