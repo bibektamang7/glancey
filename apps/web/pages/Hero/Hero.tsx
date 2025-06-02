@@ -1,25 +1,11 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import {
-	motion,
-	useMotionValue,
-	useMotionValueEvent,
-	useScroll,
-	useSpring,
-	useTransform,
-} from "motion/react";
+import { motion, useScroll, useSpring, useTransform } from "motion/react";
 import dynamic from "next/dynamic";
-import {
-	Badge,
-	Globe,
-	MapPin,
-	MessageCircle,
-	Shield,
-	Users,
-	Zap,
-} from "lucide-react";
+import { Globe, MapPin, MessageCircle, Shield, Users, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spotlight } from "@/components/ui/spotlight";
+import { globeConfig, sampleArcs, sectionVariant } from "@/data/Hero";
 
 const World = dynamic(
 	() => import("@/components/ui/globe").then((m) => m.World),
@@ -27,393 +13,6 @@ const World = dynamic(
 		ssr: false,
 	}
 );
-
-const colors = ["#06b6d4", "#3b82f6", "#6366f1"];
-const sampleArcs = [
-	{
-		order: 1,
-		startLat: -19.885592,
-		startLng: -43.951191,
-		endLat: -22.9068,
-		endLng: -43.1729,
-		arcAlt: 0.1,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 1,
-		startLat: 28.6139,
-		startLng: 77.209,
-		endLat: 3.139,
-		endLng: 101.6869,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 1,
-		startLat: -19.885592,
-		startLng: -43.951191,
-		endLat: -1.303396,
-		endLng: 36.852443,
-		arcAlt: 0.5,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 2,
-		startLat: 1.3521,
-		startLng: 103.8198,
-		endLat: 35.6762,
-		endLng: 139.6503,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 2,
-		startLat: 51.5072,
-		startLng: -0.1276,
-		endLat: 3.139,
-		endLng: 101.6869,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 2,
-		startLat: -15.785493,
-		startLng: -47.909029,
-		endLat: 36.162809,
-		endLng: -115.119411,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 3,
-		startLat: -33.8688,
-		startLng: 151.2093,
-		endLat: 22.3193,
-		endLng: 114.1694,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 3,
-		startLat: 21.3099,
-		startLng: -157.8581,
-		endLat: 40.7128,
-		endLng: -74.006,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 3,
-		startLat: -6.2088,
-		startLng: 106.8456,
-		endLat: 51.5072,
-		endLng: -0.1276,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 4,
-		startLat: 11.986597,
-		startLng: 8.571831,
-		endLat: -15.595412,
-		endLng: -56.05918,
-		arcAlt: 0.5,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 4,
-		startLat: -34.6037,
-		startLng: -58.3816,
-		endLat: 22.3193,
-		endLng: 114.1694,
-		arcAlt: 0.7,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 4,
-		startLat: 51.5072,
-		startLng: -0.1276,
-		endLat: 48.8566,
-		endLng: -2.3522,
-		arcAlt: 0.1,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 5,
-		startLat: 14.5995,
-		startLng: 120.9842,
-		endLat: 51.5072,
-		endLng: -0.1276,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 5,
-		startLat: 1.3521,
-		startLng: 103.8198,
-		endLat: -33.8688,
-		endLng: 151.2093,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 5,
-		startLat: 34.0522,
-		startLng: -118.2437,
-		endLat: 48.8566,
-		endLng: -2.3522,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 6,
-		startLat: -15.432563,
-		startLng: 28.315853,
-		endLat: 1.094136,
-		endLng: -63.34546,
-		arcAlt: 0.7,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 6,
-		startLat: 37.5665,
-		startLng: 126.978,
-		endLat: 35.6762,
-		endLng: 139.6503,
-		arcAlt: 0.1,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 6,
-		startLat: 22.3193,
-		startLng: 114.1694,
-		endLat: 51.5072,
-		endLng: -0.1276,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 7,
-		startLat: -19.885592,
-		startLng: -43.951191,
-		endLat: -15.595412,
-		endLng: -56.05918,
-		arcAlt: 0.1,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 7,
-		startLat: 48.8566,
-		startLng: -2.3522,
-		endLat: 52.52,
-		endLng: 13.405,
-		arcAlt: 0.1,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 7,
-		startLat: 52.52,
-		startLng: 13.405,
-		endLat: 34.0522,
-		endLng: -118.2437,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 8,
-		startLat: -8.833221,
-		startLng: 13.264837,
-		endLat: -33.936138,
-		endLng: 18.436529,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 8,
-		startLat: 49.2827,
-		startLng: -123.1207,
-		endLat: 52.3676,
-		endLng: 4.9041,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 8,
-		startLat: 1.3521,
-		startLng: 103.8198,
-		endLat: 40.7128,
-		endLng: -74.006,
-		arcAlt: 0.5,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 9,
-		startLat: 51.5072,
-		startLng: -0.1276,
-		endLat: 34.0522,
-		endLng: -118.2437,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 9,
-		startLat: 22.3193,
-		startLng: 114.1694,
-		endLat: -22.9068,
-		endLng: -43.1729,
-		arcAlt: 0.7,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 9,
-		startLat: 1.3521,
-		startLng: 103.8198,
-		endLat: -34.6037,
-		endLng: -58.3816,
-		arcAlt: 0.5,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 10,
-		startLat: -22.9068,
-		startLng: -43.1729,
-		endLat: 28.6139,
-		endLng: 77.209,
-		arcAlt: 0.7,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 10,
-		startLat: 34.0522,
-		startLng: -118.2437,
-		endLat: 31.2304,
-		endLng: 121.4737,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 10,
-		startLat: -6.2088,
-		startLng: 106.8456,
-		endLat: 52.3676,
-		endLng: 4.9041,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 11,
-		startLat: 41.9028,
-		startLng: 12.4964,
-		endLat: 34.0522,
-		endLng: -118.2437,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 11,
-		startLat: -6.2088,
-		startLng: 106.8456,
-		endLat: 31.2304,
-		endLng: 121.4737,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 11,
-		startLat: 22.3193,
-		startLng: 114.1694,
-		endLat: 1.3521,
-		endLng: 103.8198,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 12,
-		startLat: 34.0522,
-		startLng: -118.2437,
-		endLat: 37.7749,
-		endLng: -122.4194,
-		arcAlt: 0.1,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 12,
-		startLat: 35.6762,
-		startLng: 139.6503,
-		endLat: 22.3193,
-		endLng: 114.1694,
-		arcAlt: 0.2,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 12,
-		startLat: 22.3193,
-		startLng: 114.1694,
-		endLat: 34.0522,
-		endLng: -118.2437,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 13,
-		startLat: 52.52,
-		startLng: 13.405,
-		endLat: 22.3193,
-		endLng: 114.1694,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 13,
-		startLat: 11.986597,
-		startLng: 8.571831,
-		endLat: 35.6762,
-		endLng: 139.6503,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 13,
-		startLat: -22.9068,
-		startLng: -43.1729,
-		endLat: -34.6037,
-		endLng: -58.3816,
-		arcAlt: 0.1,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-	{
-		order: 14,
-		startLat: -33.936138,
-		startLng: 18.436529,
-		endLat: 21.395643,
-		endLng: 39.883798,
-		arcAlt: 0.3,
-		color: colors[Math.floor(Math.random() * (colors.length - 1))] ?? "#87cefa",
-	},
-];
-
-const globeConfig = {
-	pointSize: 4,
-	globeColor: "#062056",
-	showAtmosphere: true,
-	atmosphereColor: "#FFFFFF",
-	atmosphereAltitude: 0.1,
-	emissive: "#062056",
-	emissiveIntensity: 0.1,
-	shininess: 0.9,
-	polygonColor: "rgba(255,255,255,0.7)",
-	ambientLight: "#38bdf8",
-	directionalLeftLight: "#ffffff",
-	directionalTopLight: "#ffffff",
-	pointLight: "#ffffff",
-	arcTime: 1000,
-	arcLength: 0.9,
-	rings: 1,
-	maxRings: 3,
-	initialPosition: { lat: 22.3193, lng: 114.1694 },
-	autoRotate: true,
-	autoRotateSpeed: 0.5,
-};
 
 const Hero = () => {
 	const containerRef = useRef(null);
@@ -464,10 +63,6 @@ const Hero = () => {
 
 	const [globeProgress, setGlobeProgress] = useState(0);
 
-	useMotionValueEvent(z, "change", (latest) => {
-		console.log("this is trigger of globe", latest);
-	});
-
 	useEffect(() => {
 		const unsubscribe = smoothProgress.on("change", (latest) => {
 			setGlobeProgress(latest);
@@ -481,7 +76,6 @@ const Hero = () => {
 				ref={containerRef}
 				className="min-h-screen h-full dark relative "
 			>
-				{/* Globe */}
 				<motion.div
 					style={{ right: globeRight, width: globeWidth, left: globeLeft }}
 					className="fixed right-0 top-0 !w-full h-screen hidden lg:block z-10"
@@ -493,7 +87,6 @@ const Hero = () => {
 						cameraZ={z}
 					/>
 				</motion.div>
-				{/* This is hide */}
 				<div className="relative z-20 lg:w-1/2 text-white !px-12">
 					<section className="h-screen flex items-center justify-center px-6 lg:px-12">
 						<motion.div
@@ -507,7 +100,7 @@ const Hero = () => {
 								initial={{ opacity: 0 }}
 								whileInView={{ opacity: 1 }}
 								transition={{ duration: 0.8, delay: 0.2 }}
-								className="text-5xl tracking-tighter lg:text-5xl font-bold text-white mb-6 leading-tighter"
+								className="text-5xl tracking-tighter lg:text-7xl font-bold text-white mb-6 leading-tighter"
 							>
 								Connect with
 								<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
@@ -520,7 +113,7 @@ const Hero = () => {
 								initial={{ opacity: 0 }}
 								whileInView={{ opacity: 1 }}
 								transition={{ duration: 0.8, delay: 0.4 }}
-								className="text-sm !my-2 text-gray-400 !mb-6 leading-tight tracking-tighter"
+								className="text-sm lg:text-lg !my-4 text-gray-400 !mb-6 leading-tight tracking-tighter"
 							>
 								Discover and communicate with users in your vicinity. Break
 								geographical barriers and build meaningful connections with
@@ -558,10 +151,10 @@ const Hero = () => {
 								whileInView={{ opacity: 1 }}
 								transition={{ duration: 1.5, delay: 0.3 }}
 								animate={{}}
-								className="text-3xl lg:text-4xl font-bold text-white mb-8"
+								className="text-3xl lg:text-6xl font-bold text-slate-100 mb-8"
 							>
 								Discover Your
-								<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
+								<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-600 to-blue-400">
 									{" "}
 									Local Network
 								</span>
@@ -577,10 +170,10 @@ const Hero = () => {
 										<MapPin className="w-4 h-4 text-blue-400" />
 									</div>
 									<div>
-										<h3 className="text-normal font-semibold text-white mb-2">
+										<h3 className="text-lg font-semibold text-white mb-2">
 											Location-Based Discovery
 										</h3>
-										<p className="text-gray-300 text-sm tracking-tighter leading-tight">
+										<p className="text-gray-300 tracking-tighter">
 											Find and connect with users within your specified radius.
 											Our advanced geolocation technology ensures accurate
 											proximity matching.
@@ -600,7 +193,7 @@ const Hero = () => {
 										<h3 className="text-lg font-semibold text-white mb-2">
 											Community Building
 										</h3>
-										<p className="text-gray-300 text-sm tracking-tighter leading-tight">
+										<p className="text-gray-300 tracking-tighter ">
 											Create local communities, organize events, and build
 											lasting relationships with people in your area.
 										</p>
@@ -619,7 +212,7 @@ const Hero = () => {
 										<h3 className="text-lg font-semibold text-white mb-2">
 											Real-time Messaging
 										</h3>
-										<p className="text-gray-300 text-sm tracking-tighter leading-tight">
+										<p className="text-gray-300  tracking-tighter">
 											Instant messaging with nearby users. Share thoughts,
 											coordinate meetups, and stay connected in real-time.
 										</p>
@@ -641,7 +234,7 @@ const Hero = () => {
 								initial={{ opacity: 0.2 }}
 								whileInView={{ opacity: 1 }}
 								transition={{ duration: 1.6, delay: 0.3, ease: "easeInOut" }}
-								className="text-3xl lg:text-4xl font-bold text-white !mb-8"
+								className="text-3xl lg:text-5xl font-bold text-white !mb-8"
 							>
 								Powered by
 								<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-400">
@@ -662,7 +255,7 @@ const Hero = () => {
 											Global Infrastructure
 										</h3>
 									</div>
-									<p className="text-gray-300 text-sm tracking-tighter leading-tight !mt-2">
+									<p className="text-gray-300 tracking-tight !mt-2">
 										Our worldwide network ensures fast, reliable connections no
 										matter where you are. Low latency communication across
 										continents.
@@ -676,11 +269,11 @@ const Hero = () => {
 								>
 									<div className="flex items-center space-x-3 mb-4 gap-2">
 										<Shield className="w-4 h-4 text-blue-400" />
-										<h3 className="text-lg font-semibold text-white tracking-tighter leading-tight">
+										<h3 className="text-lg font-semibold text-white tracking-tight leading-tight">
 											Privacy First
 										</h3>
 									</div>
-									<p className="text-gray-300 text-sm leading-tight tracking-tighter !mt-2">
+									<p className="text-gray-300 tracking-tight !mt-2">
 										End-to-end encryption and privacy controls. Your location
 										data is secure and only shared with your explicit consent.
 									</p>
@@ -697,7 +290,7 @@ const Hero = () => {
 											Lightning Fast
 										</h3>
 									</div>
-									<p className="text-gray-300 text-sm tracking-tighter leading-tight !mt-2">
+									<p className="text-gray-300 tracking-tight !mt-2">
 										Optimized algorithms for instant user discovery and message
 										delivery. Connect with nearby users in milliseconds.
 									</p>
@@ -783,25 +376,6 @@ const Hero = () => {
 			</motion.section>
 		</>
 	);
-};
-
-const sectionVariant = {
-	initial: { opacity: 0 },
-	animate: {
-		opacity: 1,
-		transition: {
-			duration: 0.6,
-			ease: "easeInOut",
-			staggerChildren: 0.2,
-		},
-	},
-	exit: {
-		opacity: 0,
-		transition: {
-			duration: 0.4,
-			ease: "easeInOut",
-		},
-	},
 };
 
 export default Hero;
