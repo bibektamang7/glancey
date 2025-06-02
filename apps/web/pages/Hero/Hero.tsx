@@ -19,6 +19,7 @@ import {
 	Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Spotlight } from "@/components/ui/spotlight";
 
 const World = dynamic(
 	() => import("@/components/ui/globe").then((m) => m.World),
@@ -714,7 +715,14 @@ const Hero = () => {
 				style={{ opacity: finalSectionOpacity }}
 				className="min-h-screen relative flex items-center justify-center px-6 lg:px-12 !z-[100]"
 			>
-				<div className="max-w-2xl text-center !space-y-4">
+				<Spotlight
+					className="-top-40 left-0 md:-top-20 md:left-60"
+					fill="white"
+				/>
+				<motion.div
+					animate={{ scale: 1.3 }}
+					className="max-w-2xl text-center !space-y-4"
+				>
 					<motion.h2
 						initial={{ opacity: 0 }}
 						whileInView={{ opacity: 1 }}
@@ -771,7 +779,7 @@ const Hero = () => {
 							<div className="text-gray-400 text-sm">Connections Made</div>
 						</div>
 					</motion.div>
-				</div>
+				</motion.div>
 			</motion.section>
 		</>
 	);
