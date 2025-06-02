@@ -483,7 +483,7 @@ const Hero = () => {
 				{/* Globe */}
 				<motion.div
 					style={{ right: globeRight, width: globeWidth, left: globeLeft }}
-					className="fixed right-0 top-0 !w-full h-screen hidden lg:block"
+					className="fixed right-0 top-0 !w-full h-screen hidden lg:block z-10"
 				>
 					<World
 						globeConfig={globeConfig}
@@ -706,62 +706,77 @@ const Hero = () => {
 					</section>
 				</div>
 			</div>
-			{/* Trigger at this div */}
 			<div
 				ref={globeTriggerRef}
 				className="h-[300vh]"
 			></div>
-			{/* Show after finish */}
 			<motion.section
 				style={{ opacity: finalSectionOpacity }}
-				className="min-h-screen flex items-center justify-center px-6 lg:px-12"
+				className="min-h-screen relative flex items-center justify-center px-6 lg:px-12 !z-[100]"
 			>
-				<div className="max-w-2xl text-center">
-					<h2 className="text-4xl lg:text-6xl font-bold text-white mb-6">
+				<div className="max-w-2xl text-center !space-y-4">
+					<motion.h2
+						initial={{ opacity: 0 }}
+						whileInView={{ opacity: 1 }}
+						transition={{ duration: 1 }}
+						className="text-4xl lg:text-6xl font-semibold text-white mb-6"
+					>
 						Ready to
 						<span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400">
 							{" "}
 							Connect?
 						</span>
-					</h2>
-					<p className="text-xl text-gray-300 mb-8">
+					</motion.h2>
+					<motion.p
+						initial={{ opacity: 0 }}
+						whileInView={{ opacity: 1 }}
+						transition={{ duration: 1 }}
+						className=" text-gray-500 mb-8"
+					>
 						Join thousands of users already connecting with their local
 						communities. Start building meaningful relationships today.
-					</p>
-					<div className="flex flex-col sm:flex-row gap-4 justify-center">
-						<Button
-							size="lg"
-							className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-12 py-4 text-lg"
-						>
+					</motion.p>
+					<motion.div
+						initial={{ opacity: 0 }}
+						whileInView={{ opacity: 1 }}
+						transition={{ duration: 1 }}
+						className="flex flex-col sm:flex-row gap-4 justify-center"
+					>
+						<Button className="bg-blue-700 text-white !px-12 py-4 hover:cursor-pointer">
 							Download App
 						</Button>
 						<Button
-							size="lg"
 							variant="outline"
-							className="border-gray-600 text-gray-300 hover:bg-gray-800 px-12 py-4 text-lg"
+							className="border-gray-600 text-black hover:bg-slate-300 hover:cursor-pointer !px-12 py-4"
 						>
 							View Demo
 						</Button>
-					</div>
-					<div className="mt-12 grid grid-cols-3 gap-8 text-center">
+					</motion.div>
+					<motion.div
+						initial={{ opacity: 0 }}
+						whileInView={{ opacity: 1 }}
+						transition={{ duration: 1 }}
+						className="mt-12 grid grid-cols-3 gap-8 text-center"
+					>
 						<div>
-							<div className="text-3xl font-bold text-white">50K+</div>
-							<div className="text-gray-400">Active Users</div>
+							<div className="text-lg text-white">50K+</div>
+							<div className="text-gray-400 text-sm">Active Users</div>
 						</div>
 						<div>
-							<div className="text-3xl font-bold text-white">100+</div>
-							<div className="text-gray-400">Cities</div>
+							<div className="text-lg text-white">100+</div>
+							<div className="text-gray-400 text-sm">Cities</div>
 						</div>
 						<div>
-							<div className="text-3xl font-bold text-white">1M+</div>
-							<div className="text-gray-400">Connections Made</div>
+							<div className="text-lg text-white">1M+</div>
+							<div className="text-gray-400 text-sm">Connections Made</div>
 						</div>
-					</div>
+					</motion.div>
 				</div>
 			</motion.section>
 		</>
 	);
 };
+
 const sectionVariant = {
 	initial: { opacity: 0 },
 	animate: {
