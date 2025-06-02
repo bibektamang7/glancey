@@ -6,7 +6,7 @@ import { useThree, Canvas, extend, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import countries from "@/data/globe.json";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
-import { motion } from "motion/react";
+import { MotionValue } from "motion/react";
 declare module "@react-three/fiber" {
 	interface ThreeElements {
 		threeGlobe: ThreeElements["mesh"] & {
@@ -19,7 +19,7 @@ extend({ ThreeGlobe: ThreeGlobe });
 
 const RING_PROPAGATION_SPEED = 3;
 const aspect = 1.2;
-const cameraZ = 300;
+// const cameraZ = 300;
 
 type Position = {
 	order: number;
@@ -61,6 +61,7 @@ interface WorldProps {
 	globeConfig: GlobeConfig;
 	data: Position[];
 	scrollProgress: number;
+	cameraZ: MotionValue<number>;
 }
 
 let numbersOfRings = [0];
@@ -249,15 +250,21 @@ export function WebGLRendererConfig() {
 	return null;
 }
 
-const OrbitScene = ({ scrollProgress }: { scrollProgress: number }) => {
+const OrbitScene = ({
+	scrollProgress,
+	cameraZ,
+}: {
+	scrollProgress: number;
+	cameraZ: MotionValue<number>;
+}) => {
 	const controlsRef = useRef<OrbitControlsType | null>(null);
-
-	console.log("hello world", scrollProgress);
 	useFrame(() => {
-		console.log("hello world", scrollProgress);
 		if (controlsRef.current) {
 			const angle = scrollProgress * Math.PI;
 			controlsRef.current.setAzimuthalAngle(angle);
+
+			controlsRef.current.minDistance = cameraZ.get();
+			controlsRef.current.maxDistance = cameraZ.get();
 			controlsRef.current.update();
 		}
 	});
@@ -268,8 +275,8 @@ const OrbitScene = ({ scrollProgress }: { scrollProgress: number }) => {
 				ref={controlsRef}
 				enablePan={false}
 				enableZoom={false}
-				minDistance={cameraZ}
-				maxDistance={cameraZ}
+				minDistance={300}
+				maxDistance={300}
 				autoRotateSpeed={1}
 				autoRotate={false}
 				minPolarAngle={Math.PI / 3.5}
@@ -288,9 +295,17 @@ export function World(props: WorldProps) {
 		<Canvas
 			// scene={scene}
 			// camera={new PerspectiveCamera(50, aspect, 180, 1800)}
-			camera={{ fov: 50, position: [0, 0, cameraZ], near: 180, far: 1800 }}
+			camera={{
+				fov: 50,
+				position: [0, 0, props.cameraZ.get()],
+				near: 180,
+				far: 1800,
+			}}
 		>
-			<OrbitScene scrollProgress={props.scrollProgress} />
+			<OrbitScene
+				scrollProgress={props.scrollProgress}
+				cameraZ={props.cameraZ}
+			/>
 			<WebGLRendererConfig />
 			<ambientLight
 				color={globeConfig.ambientLight}

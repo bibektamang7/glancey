@@ -1,6 +1,7 @@
 import Image, { type ImageProps } from "next/image";
 import { Button } from "@repo/ui/button";
 import Hero from "@/pages/Hero/Hero";
+import { BackgroundBeams } from "@/components/ui/background-beams";
 
 type Props = Omit<ImageProps, "src"> & {
 	srcLight: string;
@@ -28,8 +29,9 @@ const ThemeImage = (props: Props) => {
 
 export default function Home() {
 	return (
-		<div className="!h-full">
+		<div className="!h-full relative">
 			<Hero />
+			<BackgroundBeams />
 		</div>
 	);
 }
