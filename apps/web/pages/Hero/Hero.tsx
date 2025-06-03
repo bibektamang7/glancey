@@ -11,6 +11,7 @@ const World = dynamic(
 	() => import("@/components/ui/globe").then((m) => m.World),
 	{
 		ssr: false,
+		loading: () => <p>Loading...</p>,
 	}
 );
 
