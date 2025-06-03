@@ -8,27 +8,28 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import React from "react";
 
 const Login = () => {
 	return (
 		<div className="dark flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-background via-background/95 to-background/90 p-4">
-			{/* <Link
+			<Link
 				href="/"
-				className="absolute left-8 top-8 flex items-center justify-center gap-2"
+				className="absolute left-8 top-8 flex items-center justify-center gap-1 group"
 			>
-				<div className="relative h-8 w-8 overflow-hidden rounded-full bg-gradient-to-br from-purple-500 to-blue-500">
-					<div className="absolute inset-0 flex items-center justify-center text-white font-bold">
-						R
-					</div>
-				</div>
-				<span className="font-bold text-xl">Recaify</span>
-			</Link> */}
-
+				<ChevronLeft
+					className="text-white group-hover:text-slate-400"
+					size={20}
+				/>
+				<span className="font-bold text-sm text-white group-hover:text-slate-400">
+					Back
+				</span>
+			</Link>
 			<Card className="w-full !max-w-md !p-4">
 				<CardHeader className="!space-y-1">
-					<CardTitle className="text-2xl font-bold">Get started</CardTitle>
+					<CardTitle className="text-2xl font-bold">Sign In</CardTitle>
 					<CardDescription>
 						Continue with Google to access your account
 					</CardDescription>
