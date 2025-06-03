@@ -6,7 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -47,12 +46,12 @@ enum Professions {
 }
 
 model User {
-  id         String      @id @unique @default(uuid())
+  id         String       @id @unique @default(uuid())
   name       String
-  email      String
+  email      String       @unique
   image      String
-  interests  Interest[]  @map("other")
-  aboutMe    String
-  createdAt  DateTime    @default(now())
-  profession Professions
+  interests  Interest[]   @map("other")
+  aboutMe    String?
+  createdAt  DateTime     @default(now())
+  profession Professions?
 }
