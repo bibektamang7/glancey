@@ -1,6 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import type { SocketData } from ".";
 import { createClient } from "redis-config";
+import { USER_MOVEMENT, USERS_NEAR_YOU } from "socket-events";
 
 const redisClient = createClient();
 
@@ -14,9 +15,8 @@ const redisClient = createClient();
 
 export interface TUser {
 	id: string;
-	username: string;
+	name: string;
 	image: string;
-	interests: string[];
 }
 
 interface UserLocation {
@@ -28,7 +28,7 @@ export class User {
 	public userId: string;
 	private socket: ServerWebSocket<SocketData>;
 	public username: string;
-	private location: UserLocation;
+	private location?: UserLocation;
 	private image: string;
 	public interests: string[];
 
@@ -36,16 +36,16 @@ export class User {
 		userId: string,
 		socket: ServerWebSocket<SocketData>,
 		image: string,
-		location: { longitude: number; latitude: number },
-		interests: string[],
 		username: string
 	) {
 		this.userId = userId;
 		this.socket = socket;
-		this.location = location;
 		this.image = image;
-		this.interests = interests;
+		this.interests = [];
 		this.username = username;
+	}
+	setInterests(interests: string[]) {
+		this.interests.push(...interests);
 	}
 	getInterests() {
 		return this.interests;
@@ -77,33 +77,67 @@ export class User {
 				{ latitude: location.latitude, longitude: location.longitude },
 				{ radius: 10, unit: "km" }
 			);
+			const membersSocket = userManager.getAllUsers(members);
 			//TODO: ASSUMING members HOLDS MEMBER VALUE STORED ON GEO_ADD
-			members.forEach((member) => {
-				const userId = member.split(":")[1];
-				console.log(userId, "this is online user in redius something");
-				if (userId) {
-					const socketUser = userManager.getUser(userId);
-					if (socketUser) {
-						socketUser.getSocket().send(
-							JSON.stringify({
-								type: "",
-								payload: {},
-							})
-						);
-					}
-				}
+			membersSocket.forEach((member) => {
+				member.getSocket().send(
+					JSON.stringify({
+						type: USER_MOVEMENT,
+						payload: {
+							user: {
+								id: this.userId,
+								username: this.username,
+								image: this.image,
+								interests: this.interests,
+								location: this.location,
+							},
+						},
+					})
+				);
 			});
+			const usersInfo = extractUserInfo(membersSocket);
+			this.socket.send(
+				JSON.stringify({
+					type: USERS_NEAR_YOU,
+					payload: {
+						aroundUsers: usersInfo,
+					},
+				})
+			);
 		} catch (error) {
 			console.error("Couldn't update location of user", error);
 		}
 	}
 }
 
+interface UserInfo {
+	id: string;
+	image: string;
+	username: string;
+	interests: string[];
+	location: UserLocation | undefined;
+}
+
+const extractUserInfo = (users: User[]) => {
+	const infos = users.reduce((acc: UserInfo[], currentUser) => {
+		const info = {
+			id: currentUser.userId,
+			username: currentUser.username,
+			image: currentUser.getImage(),
+			interests: currentUser.interests,
+			location: currentUser.getLocation(),
+		};
+		acc.push(info);
+		return acc;
+	}, []);
+	return infos;
+};
+
 class UserManager {
 	private static instance: UserManager;
-	onlineUsers: Set<User>;
+	onlineUsers: Map<string, User>;
 	constructor() {
-		this.onlineUsers = new Set();
+		this.onlineUsers = new Map();
 	}
 	static getInstance() {
 		if (UserManager.instance) {
@@ -113,21 +147,17 @@ class UserManager {
 		return UserManager.instance;
 	}
 	async addUser(user: User) {
-		this.onlineUsers.add(user);
-		//TODO:
-		const location = user.getLocation();
 		const userId = user.getUserId();
-		// TODO: FUTURE UPDATES
-		// RETRY MECHANISM IF FAILED TO ADD USER
-		try {
-			await redisClient.geoAdd(`users:location`, {
-				longitude: location.longitude,
-				latitude: location.latitude,
-				member: `user:${userId}`,
-			});
-		} catch (error) {
-			console.log("couldn't add user in redis", error);
-		}
+		this.onlineUsers.set(userId, user);
+		// try {
+		// 	await redisClient.geoAdd(`users:location`, {
+		// 		longitude: location.longitude,
+		// 		latitude: location.latitude,
+		// 		member: `user:${userId}`,
+		// 	});
+		// } catch (error) {
+		// 	console.log("couldn't add user in redis", error);
+		// }
 	}
 	getUser(userId: string): User | null {
 		this.onlineUsers.forEach((user) => {
@@ -137,14 +167,25 @@ class UserManager {
 		return null;
 	}
 	async removeUser(user: User) {
-		this.onlineUsers.delete(user);
 		const userId = user.getUserId();
+		this.onlineUsers.delete(userId);
 		try {
 			await redisClient.zRem("users:location", `user:${userId}`);
 		} catch (error) {
 			console.log("Failed to remove user from redis", error);
 		}
 		//TODO: REMOVE FROM REDIS AS WELL
+	}
+	getAllUsers(users: string[]) {
+		return users.reduce((acc: User[], currentUser) => {
+			const userId = currentUser.split(":")[1];
+			if (!userId) return acc;
+			const user = this.onlineUsers.get(userId);
+			if (user) {
+				acc.push(user);
+			}
+			return acc;
+		}, []);
 	}
 }
 

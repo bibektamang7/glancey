@@ -27,11 +27,14 @@ import {
 	REQUEST_START_CALL,
 	RESUME_TRANSPORT,
 	SEND_MESSAGE_IN_CHAT,
-} from "../src/constants";
+	SET_INTERESTS_AND_LOCATION,
+} from "socket-events";
 import type { SocketData } from "../src";
 import { userManager } from "../src/user";
 import { Chat, chatManager } from "../src/chat";
 import { createClient } from "redis-config";
+
+import "../src/redisSubscribe";
 
 const socketPubClient = createClient();
 
@@ -50,16 +53,27 @@ export const handleMessage = async (
 	const parsedMessage = JSON.parse(String(message));
 	const payload = parsedMessage.payload;
 	const senderUser = userManager.getUser(payload.sender);
+	if (!senderUser) return;
 	switch (parsedMessage.type) {
+		case SET_INTERESTS_AND_LOCATION: {
+			senderUser.setInterests(payload.interests);
+			senderUser.updateLocation({
+				longitude: payload.location.lng,
+				latitude: payload.location.lat,
+			});
+			break;
+			// ✅✅✅
+		}
 		case MOVEMENT:
 			if (senderUser) {
-				senderUser.updateLocation(payload);
+				senderUser.updateLocation(payload.location);
 				// TODO: SEND EVENT TO USER WHO IS AROUND / NEAR YOU
 			}
-			break;
+			break; // ✅✅✅
+
 		case REQUEST_CHAT_MESSAGE:
 			const requestedSocket = userManager.getUser(payload.requestTo);
-			if (senderUser && requestedSocket) {
+			if (requestedSocket) {
 				const userId = senderUser.getUserId();
 				const chat = chatManager.createChat(userId, senderUser);
 				chat.addParticipant(requestedSocket);
@@ -81,7 +95,7 @@ export const handleMessage = async (
 			break;
 		case SEND_MESSAGE_IN_CHAT: {
 			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
+			if (chat) {
 				const senderUserId = senderUser.getUserId();
 				chat.broadcastMessage(
 					JSON.stringify({
@@ -103,7 +117,7 @@ export const handleMessage = async (
 		}
 		case DELETE_MESSAGE_FROM_CHAT: {
 			const chat = chatManager.getChat(payload.chatId);
-			if (chat && senderUser) {
+			if (chat) {
 				const senderUserId = senderUser.getUserId();
 				chat.broadcastMessage(
 					JSON.stringify({
@@ -120,7 +134,7 @@ export const handleMessage = async (
 		case REMOVE_USER_FROM_CHAT:
 			{
 				const chat = chatManager.getChat(payload.chatId);
-				if (senderUser && chat) {
+				if (chat) {
 					const senderId = senderUser.getUserId();
 					if (senderId === chat.chatId) {
 						const requestUser = userManager.getUser(
@@ -144,7 +158,7 @@ export const handleMessage = async (
 			{
 				const chat = chatManager.getChat(payload.chatId);
 
-				if (senderUser && chat) {
+				if (chat) {
 					const socketUserId = senderUser.getUserId();
 					chat.removeParticipant(senderUser);
 					chat.broadcastMessage(
@@ -188,7 +202,7 @@ export const handleMessage = async (
 				}
 
 				const receiverUser = userManager.getUser(payload.requestTo);
-				if (senderUser && receiverUser) {
+				if (receiverUser) {
 					receiverUser.getSocket().send(
 						JSON.stringify({
 							type: REQUEST_JOIN_CALL,
@@ -207,7 +221,7 @@ export const handleMessage = async (
 		case ACCEPT_START_CALL:
 			{
 				const acceptedToUser = userManager.getUser(payload.acceptedTo);
-				if (senderUser && acceptedToUser) {
+				if (acceptedToUser) {
 					const adminId = acceptedToUser.getUserId();
 					let chat: Chat | undefined;
 					if (payload.chatId) {
@@ -251,7 +265,7 @@ export const handleMessage = async (
 		case REJECT_START_CALL:
 			{
 				const rejectedTo = userManager.getUser(payload.rejectedTo);
-				if (senderUser && rejectedTo) {
+				if (rejectedTo) {
 					rejectedTo.getSocket().send(
 						JSON.stringify({
 							type: INCOMING_CALL_REJECTED,
@@ -270,7 +284,7 @@ export const handleMessage = async (
 		case REQUEST_JOIN_CALL:
 			{
 				const chat = chatManager.getChat(payload.chatId);
-				if (senderUser && chat) {
+				if (chat) {
 					const chatAdmin = chat.admin;
 					chatAdmin.getSocket().send(
 						JSON.stringify({
@@ -289,7 +303,7 @@ export const handleMessage = async (
 			{
 				const acceptedTo = userManager.getUser(payload.acceptedTo);
 				const chat = chatManager.getChat(payload.chatId);
-				if (senderUser && chat && acceptedTo) {
+				if (chat && acceptedTo) {
 					chat.addParticipantInCall(acceptedTo);
 					// TODO: may be some delay here,
 					// to notify users in call
@@ -322,7 +336,7 @@ export const handleMessage = async (
 		case REJECT_JOIN_CALL:
 			{
 				const rejectedTo = userManager.getUser(payload.rejectedTo);
-				if (senderUser && rejectedTo) {
+				if (rejectedTo) {
 					rejectedTo.getSocket().send(
 						JSON.stringify({
 							type: REJECT_INCOMING_CALL_JOIN_REQUEST,
@@ -339,7 +353,7 @@ export const handleMessage = async (
 			break;
 		case GET_ROUTER_RTP_CAPABILITIES: {
 			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
+			if (chat) {
 				const senderUserId = senderUser.getUserId();
 
 				await socketPubClient.publish(
@@ -352,7 +366,7 @@ export const handleMessage = async (
 		case CREATE_PRODUCER_TRANSPORT: {
 			// send rtp capabilities comes from client
 			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
+			if (chat) {
 				await socketPubClient.publish(
 					"mediasoup:createProducerTransport",
 					JSON.stringify({
@@ -368,8 +382,7 @@ export const handleMessage = async (
 			// send dtlsParameters comes from client
 
 			const chat = chatManager.getChat(payload.chatId);
-			const senderUser = userManager.getUser(payload.userId);
-			if (senderUser && chat) {
+			if (chat) {
 				await socketPubClient.publish(
 					"mediasoup:connectProducerTransport",
 					JSON.stringify({
@@ -383,7 +396,7 @@ export const handleMessage = async (
 		}
 		case CONNECT_PRODUCER: {
 			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
+			if (chat) {
 				await socketPubClient.publish(
 					"mediasoup:produce",
 					JSON.stringify({
@@ -399,7 +412,7 @@ export const handleMessage = async (
 		}
 		case CREATE_CONSUMER_TRANSPORT: {
 			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
+			if (chat) {
 				// TODO: NOT SURE NOW,
 				// SEND RTPCAPABILITIIES
 				await socketPubClient.publish(
@@ -414,7 +427,7 @@ export const handleMessage = async (
 		}
 		case CONNECT_CONSUMER_TRANSPORT: {
 			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
+			if (chat) {
 				await socketPubClient.publish(
 					"mediasoup:connectConsumerTransport",
 					JSON.stringify({
@@ -429,7 +442,7 @@ export const handleMessage = async (
 		}
 		case CONNECT_CONSUMER: {
 			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
+			if (chat) {
 				await socketPubClient.publish(
 					"mediasoup:consume",
 					JSON.stringify({
@@ -445,7 +458,7 @@ export const handleMessage = async (
 		}
 		case RESUME_TRANSPORT: {
 			const chat = chatManager.getChat(payload.chatId);
-			if (senderUser && chat) {
+			if (chat) {
 				await socketPubClient.publish(
 					"mediasoup:resume",
 					JSON.stringify({

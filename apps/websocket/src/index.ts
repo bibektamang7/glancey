@@ -6,7 +6,6 @@ import { handleMessage } from "../helpers/eventHandler";
 
 export type SocketData = {
 	user: TUser;
-	location: { longitude: number; latitude: number };
 };
 
 const websocketHandle: WebSocketHandler<SocketData> = {
@@ -15,9 +14,7 @@ const websocketHandle: WebSocketHandler<SocketData> = {
 			ws.data.user.id,
 			ws,
 			ws.data.user.image,
-			ws.data.location,
-			ws.data.user.interests,
-			ws.data.user.username
+			ws.data.user.name
 		);
 		userManager.addUser(socketUser);
 		console.log("Socket user created.");
@@ -34,6 +31,7 @@ const websocketHandle: WebSocketHandler<SocketData> = {
 		console.log("socket close code: ", code);
 		console.log("socket close reason", reason);
 	},
+
 	perMessageDeflate: true,
 };
 
@@ -42,16 +40,16 @@ const server = Bun.serve({
 	async fetch(req, server) {
 		const url = new URL(req.url);
 		const token = url.searchParams.get("token");
-		const location = url.searchParams.get("location");
+
 		if (!token) {
 			return new Response("Unathenticated");
 		}
 		const user = getUserFromToken(token);
+		console.log(user, "This is user form next auth");
 		if (!user) return new Response("Invalid token", { status: 403 });
 		const success = server.upgrade(req, {
 			data: {
 				user,
-				location,
 			},
 		});
 		if (success) {
