@@ -10,6 +10,7 @@ import {
 	INCOMING_CALL_REJECTED,
 	LEAVE_CALL,
 	RECEIVE_MESSAGE_IN_CHAT,
+	REJECT_INCOMING_CALL_JOIN_REQUEST,
 	REMOVED_FROM_CHAT,
 	REQUEST_CHAT_MESSAGE,
 	REQUEST_JOIN_CALL,
@@ -55,6 +56,20 @@ export const useHandleSocketEvents = () => {
 	const handleRequestJoinCall = (requestedBy: User) => {};
 	const handleIncomingCallAccepted = (chatId: string, acceptedUser: User) => {};
 	const handleIncomingCallJoinRequest = (senderUser: User) => {};
+	const handleIncomingCallJoinAccepted = (chatId: string) => {};
+	const handleRejectIncomingJoinRequest = (rejectedBy: User) => {};
+	const handleRtpCapabilities = (chatId: string, rtpCapabilities: any) => {};
+	const handleProducerTransportCreated = (params: any) => {};
+	const handleProducedMedia = (
+		user: User,
+		chatId: string,
+		producerId: string
+	) => {};
+	const handleConsumerTransportCreated = (params: any, chatId: string) => {};
+	const handleConsumerTransportConnected = (message: any, chatId: string) => {};
+	const handleSubscribed = (params: any, chatId: string) => {};
+	const handleResumed = (message: any) => {};
+	const handleErrorOnMediaSoup = (message: string) => {};
 
 	const handleEventMessage = (message: any) => {
 		const payload = message.payload;
@@ -121,6 +136,43 @@ export const useHandleSocketEvents = () => {
 			case INCOMING_CALL_JOIN_ACCEPTED: {
 				// TODO: NOT SURE as well
 				handleIncomingCallJoinAccepted(payload.chatId);
+				break;
+			}
+			case REJECT_INCOMING_CALL_JOIN_REQUEST: {
+				handleRejectIncomingJoinRequest(payload.rejectedBy);
+				break;
+			}
+			case "rtpCapabilities": {
+				handleRtpCapabilities(payload.chatId, payload.rtpCapabilities);
+				break;
+			}
+			case "producer_transport_created": {
+				handleProducerTransportCreated(payload);
+				break;
+			}
+			// ONE LEFT HERE
+			case "produced_media": {
+				handleProducedMedia(payload.user, payload.chatId, payload.producerId);
+				break;
+			}
+			case "consumer_transport_created": {
+				handleConsumerTransportCreated(payload.params, payload.chatId);
+				break;
+			}
+			case "consumer_transport_connected": {
+				handleConsumerTransportConnected(payload.message, payload.chatId);
+				break;
+			}
+			case "subscribed": {
+				handleSubscribed(payload.params, payload.chatId);
+				break;
+			}
+			case "resumed": {
+				handleResumed(payload.message);
+				break;
+			}
+			case "error_on_media": {
+				handleErrorOnMediaSoup(payload.message);
 				break;
 			}
 		}
