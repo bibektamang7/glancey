@@ -1,21 +1,19 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents, Popup } from "react-leaflet";
-import L, { LatLngExpression, LatLngLiteral } from "leaflet";
+import { memo, useCallback, useEffect, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L, { LatLngLiteral } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import "leaflet-defaulticon-compatibility";
-import { createIndriverMarkerSVG } from "@/helpers/customMarker";
+import { createGoogleMapsMarker } from "@/helpers/customMarker";
+import { useGeolocation } from "@/hooks/useGeolocation";
+import LoaderComponent from "../Loader";
+import { User } from "@/types/user";
 
 type MapType = "roadmap" | "hybrid";
 
-type MapLocation = LatLngLiteral & { id: string };
+export const Map: React.FC<{ user: User }> = ({ user }) => {
+	const { currentLocation, data } = useGeolocation(user);
 
-type MapProps = {
-	center: LatLngLiteral;
-	locations: MapLocation[];
-};
-
-export const Map: React.FC<MapProps> = memo(({ center, locations }) => {
 	const [mapType, setMapType] = useState<MapType>("roadmap");
 
 	const getUrl = useCallback(() => {
@@ -25,6 +23,10 @@ export const Map: React.FC<MapProps> = memo(({ center, locations }) => {
 		};
 		return mapTypeUrls[mapType];
 	}, [mapType]);
+
+	if (!currentLocation || !data || !data.user) {
+		return <LoaderComponent />;
+	}
 
 	return (
 		<div
@@ -36,25 +38,8 @@ export const Map: React.FC<MapProps> = memo(({ center, locations }) => {
 				position: "relative",
 			}}
 		>
-			<div
-				style={{
-					position: "absolute",
-					top: "80px",
-					left: "50%",
-					transform: "translateX(-50%)",
-					zIndex: 1000,
-					background: "rgba(0,0,0,0.7)",
-					color: "white",
-					padding: "8px 16px",
-					borderRadius: "15px",
-					fontSize: "12px",
-					textAlign: "center",
-				}}
-			>
-				Move the map to position the marker at desire location
-			</div>
 			<MapContainer
-				center={center}
+				center={currentLocation}
 				zoom={30}
 				minZoom={5}
 				zoomControl={false}
@@ -63,76 +48,23 @@ export const Map: React.FC<MapProps> = memo(({ center, locations }) => {
 				doubleClickZoom={false}
 			>
 				<TileLayer url={getUrl()} />
-				<CustomMarker
-					center={center}
-					color="#FF6B35"
-				/>
+				<CustomMarker center={currentLocation} />
 			</MapContainer>
 		</div>
 	);
-});
+};
 
-const CustomMarker = ({
-	color = "#FF6B35",
-	center,
-}: {
-	color: string;
-	center: LatLngLiteral;
-}) => {
-	const [position, setPosition] = useState<LatLngExpression>([
-		center.lat,
-		center.lng,
-	]);
-	const [isMoving, setIsMoving] = useState(false);
-	const [isSettling, setIsSettling] = useState(false);
-	const markerRef = useRef<L.Marker<any>>(null);
-	const settleTimeoutRef = useRef<NodeJS.Timeout>(null);
-
-	const map = useMapEvents({
-		movestart() {
-			setIsMoving(true);
-			if (settleTimeoutRef.current) {
-				clearTimeout(settleTimeoutRef.current);
-				setIsSettling(false);
-			}
-		},
-		move() {
-			const center = map.getCenter();
-			setPosition([center.lat, center.lng]);
-		},
-		moveend() {
-			setIsMoving(false);
-			settleTimeoutRef.current = setTimeout(() => {
-				setIsSettling(true);
-				setTimeout(() => setIsSettling(false), 600);
-			}, 100);
-		},
-	});
-
-	useEffect(() => {
-		if (markerRef.current) {
-			const marker = markerRef.current;
-			const newIcon = L.divIcon({
-				className: "indriver-marker",
-				html: createIndriverMarkerSVG(60, color, isMoving || isSettling),
-				iconSize: [60, 72],
-				iconAnchor: [30, 60],
-			});
-			marker.setIcon(newIcon);
-		}
-	}, [isMoving, isSettling, color]);
-
+const CustomMarker = ({ center }: { center: LatLngLiteral }) => {
 	const initialIcon = L.divIcon({
-		className: "indriver-marker",
-		html: createIndriverMarkerSVG(60, color, false),
-		iconSize: [60, 72],
-		iconAnchor: [30, 60],
+		className: "marker",
+		html: createGoogleMapsMarker({
+			isActive: true,
+		}),
 	});
 
 	return (
 		<Marker
-			ref={markerRef}
-			position={position}
+			position={center}
 			icon={initialIcon}
 			zIndexOffset={1000}
 		>
