@@ -1,39 +1,23 @@
-"use client";
-import dynamic from "next/dynamic";
-import LoaderComponent from "@/components/Loader";
-import { useGeolocation } from "@/hooks/useGeolocation";
-import { useUserAround } from "@/hooks/useUserAround";
+import MapContainer from "@/pages/Map/MapContainer";
+import { prismaClient } from "db";
+import { auth } from "@/app/api/auth/[...nextauth]/auth";
 
-const Map = dynamic(
-	() => import("@/components/map/Map").then((component) => component.Map),
-	{
-		ssr: false,
+const MapPage = async () => {
+	const session = await auth();
+	// TODO: NOT IDEAL SOLUTION
+	if (!session || !session.user) {
+		return;
 	}
-);
-
-const MapPage = () => {
-	const { currentLocation } = useGeolocation();
-	const { locations } = useUserAround();
-	if (!currentLocation) {
-		return <LoaderComponent />;
+	const user = await prismaClient.user.findUnique({
+		where: {
+			id: session.user.id,
+		},
+	});
+	//TODO: handle properly
+	if (!user) {
+		return;
 	}
-
-	return (
-		<div
-			style={{
-				width: "100vw",
-				height: "100vh",
-			}}
-		>
-			<Map
-				center={{
-					lng: currentLocation.longitude,
-					lat: currentLocation.latitude,
-				}}
-				locations={locations}
-			/>
-		</div>
-	);
+	return <MapContainer user={user} />;
 };
 
 export default MapPage;
