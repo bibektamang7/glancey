@@ -28,6 +28,9 @@ import {
 	Check,
 } from "lucide-react";
 import { Interest } from "@/types/user";
+import { handleSetInterestsApi } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 const interestIcons = {
 	[Interest.TikTok]: Zap,
@@ -47,11 +50,9 @@ const interestIcons = {
 const SetInterests = () => {
 	const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 	const [customInterest, setCustomInterest] = useState("");
-	const [error, setError] = useState("");
+	const router = useRouter();
 
 	const handleInterestToggle = (interest: string) => {
-		setError("");
-
 		if (selectedInterests.includes(interest)) {
 			setSelectedInterests(selectedInterests.filter((i) => i !== interest));
 			if (interest === Interest.Other) {
@@ -59,79 +60,83 @@ const SetInterests = () => {
 			}
 		} else {
 			if (selectedInterests.length >= 3) {
-				setError("You can select maximum 3 interests");
+				toast("you can select maximum 3 interests");
 				return;
 			}
 			setSelectedInterests([...selectedInterests, interest]);
 		}
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		if (selectedInterests.length === 0) {
-			setError("Please select at least one interest");
+			toast("Please select at least one interest");
 			return;
 		}
 
 		if (selectedInterests.includes(Interest.Other) && !customInterest.trim()) {
-			setError("Please specify your custom interest");
+			toast("Please specify your custom interest");
 			return;
 		}
 
-		// Handle form submission
 		const finalInterests = selectedInterests.map((interest) =>
-			interest === Interest.Other ? customInterest.trim() : interest
+			interest === Interest.Other
+				? customInterest.trim().replaceAll(" ", "_")
+				: interest.replaceAll(" ", "_")
 		);
 
-		console.log("Selected interests:", finalInterests);
-		// Add your submission logic here
+		const response = await handleSetInterestsApi(finalInterests);
+		if (response) {
+			router.push("/map");
+		}
 	};
 
 	const isSelected = (interest: string) => selectedInterests.includes(interest);
 	const canSelectMore = selectedInterests.length < 3;
 
 	return (
-		<div className="min-h-screen bg-gray-950 text-white p-4 md:p-8">
-			<div className="max-w-4xl mx-auto">
+		<div className="w-full min-h-screen bg-gray-950 text-white p-4 md:p-8 flex items-center justify-center">
+			<div className="max-w-4xl">
 				<div className="text-center mb-8">
-					<h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+					<h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
 						What interests you?
 					</h1>
-					<p className="text-gray-400 text-lg">
+					<p className="text-gray-400 text-lg !mt-2">
 						Select 1-3 interests that best describe what you're passionate about
 					</p>
 				</div>
 
-				<Card className="bg-gray-900 border-gray-800">
+				<Card className="bg-gray-900 border-gray-800 !mt-4 !p-4">
 					<CardHeader>
 						<CardTitle className="text-white">Choose Your Interests</CardTitle>
 						<CardDescription className="text-gray-400">
 							Select at least 1 and maximum 3 interests
 						</CardDescription>
 					</CardHeader>
-					<CardContent className="space-y-6">
+					<CardContent className="!space-y-6">
 						{selectedInterests.length > 0 && (
-							<div className="flex flex-wrap gap-2">
+							<div className="w-full flex flex-wrap gap-2">
 								{selectedInterests.map((interest) => (
 									<Badge
 										key={interest}
 										variant="secondary"
-										className="bg-blue-600 text-white hover:bg-blue-700"
+										className="bg-blue-600 text-white hover:bg-blue-700 !px-2"
 									>
 										{interest === Interest.Other
 											? customInterest || "Other"
 											: interest}
-										<button
+										<Button
+											variant={"ghost"}
 											onClick={() => handleInterestToggle(interest)}
 											className="ml-2 hover:text-red-300"
 										>
 											×
-										</button>
+										</Button>
 									</Badge>
 								))}
 							</div>
 						)}
 
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 !mt-4">
 							{Object.values(Interest).map((interest) => {
 								const Icon = interestIcons[interest];
 								const selected = isSelected(interest);
@@ -145,7 +150,7 @@ const SetInterests = () => {
 										<Label
 											htmlFor={interest}
 											className={`
-                        flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all duration-200
+                        flex items-center !space-x-3 !p-2 !rounded-lg !border-2 !cursor-pointer !transition-all !duration-200
                         ${
 													selected
 														? "border-blue-500 bg-blue-500/10 text-blue-400"
@@ -174,7 +179,7 @@ const SetInterests = () => {
 						</div>
 
 						{selectedInterests.includes(Interest.Other) && (
-							<div className="space-y-2">
+							<div className="!space-y-2">
 								<Label
 									htmlFor="custom-interest"
 									className="text-white"
@@ -190,11 +195,6 @@ const SetInterests = () => {
 								/>
 							</div>
 						)}
-
-						{error && (
-							<div className="text-red-400 text-sm font-medium">{error}</div>
-						)}
-
 						<div className="text-center text-gray-400 text-sm">
 							{selectedInterests.length}/3 interests selected
 						</div>

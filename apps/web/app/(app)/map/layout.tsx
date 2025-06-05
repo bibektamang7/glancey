@@ -8,7 +8,10 @@ const MapLayout = ({ children }: { children: React.ReactNode }) => {
 	return (
 		<SessionProvider refetchOnWindowFocus={false}>
 			<SocketProvider>
-				{children}
+				<SidebarProvider defaultOpen={false}>
+					<CustomSidebar />
+					<section className="flex-1 z-10">{children}</section>
+				</SidebarProvider>
 			</SocketProvider>
 		</SessionProvider>
 	);
