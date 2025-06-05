@@ -12,7 +12,7 @@ import { User } from "@/types/user";
 type MapType = "roadmap" | "hybrid";
 
 export const Map: React.FC<{ user: User }> = ({ user }) => {
-	const { currentLocation, data } = useGeolocation(user);
+	// const { currentLocation, data } = useGeolocation(user);
 
 	const [mapType, setMapType] = useState<MapType>("roadmap");
 
@@ -24,22 +24,21 @@ export const Map: React.FC<{ user: User }> = ({ user }) => {
 		return mapTypeUrls[mapType];
 	}, [mapType]);
 
-	if (!currentLocation || !data || !data.user) {
-		return <LoaderComponent />;
-	}
+	// if (!currentLocation || !data || !data.user) {
+	// 	return <LoaderComponent />;
+	// }
 
 	return (
 		<div
 			style={{
 				width: "100%",
 				height: "100%",
-				borderRadius: "20px",
 				overflow: "hidden",
 				position: "relative",
 			}}
 		>
 			<MapContainer
-				center={currentLocation}
+				center={{ lat: 40, lng: 50 }}
 				zoom={30}
 				minZoom={5}
 				zoomControl={false}
@@ -48,7 +47,7 @@ export const Map: React.FC<{ user: User }> = ({ user }) => {
 				doubleClickZoom={false}
 			>
 				<TileLayer url={getUrl()} />
-				<CustomMarker center={currentLocation} />
+				{/* <CustomMarker center={currentLocation} /> */}
 			</MapContainer>
 		</div>
 	);
