@@ -3,16 +3,20 @@ import { User } from "@/types/user";
 import { useEffect, useState } from "react";
 import { USER_MOVEMENT, USERS_NEAR_YOU } from "socket-events";
 
+export interface NearerUser extends User {
+	location: { longitude: number; latitude: number };
+}
+
 export const useHandleSocketEvents = () => {
 	const { socket } = useSocket();
-	const [nearUsers, setNearUsers] = useState<User[]>([]);
-	const handleUserMovement = (user: User) => {
+	const [nearUsers, setNearUsers] = useState<NearerUser[]>([]);
+	const handleUserMovement = (user: NearerUser) => {
 		setNearUsers((prev) => [
 			...prev.filter((nearUser) => nearUser.id !== user.id),
 			user,
 		]);
 	};
-	const handleNearUsers = (users: User[]) => {
+	const handleNearUsers = (users: NearerUser[]) => {
 		// WHY DIRECTLY SETTING IT TO nearUser,
 		// WHEN OUR LOCATION IS CHANGES, IT RETURNS TO USER WITHIN THE BOUNDARY
 		setNearUsers(users);
@@ -39,5 +43,5 @@ export const useHandleSocketEvents = () => {
 			handleEventMessage(message);
 		};
 	}, [socket]);
-	return { socket };
+	return { socket, nearUsers };
 };

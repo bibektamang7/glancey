@@ -26,7 +26,7 @@ function getDistance(
 
 export const useGeolocation = (user: User) => {
 	const { data } = useSession();
-	const { socket } = useHandleSocketEvents();
+	const { socket, nearUsers } = useHandleSocketEvents();
 	const [location, setLocation] = useState<{ lng: number; lat: number }>();
 	const sentInitial = useRef(false);
 	const lastLocation = useRef<{ lng: number; lat: number }>(location);
@@ -80,5 +80,5 @@ export const useGeolocation = (user: User) => {
 		return () => navigator.geolocation.clearWatch(watchId);
 	}, [socket, data, user.interests]);
 
-	return { currentLocation: location, data };
+	return { currentLocation: location, data, nearUsers };
 };
