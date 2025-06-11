@@ -12,6 +12,7 @@ import { NearerUser } from "@/hooks/useHandleSocketEvents";
 import { Avatar } from "../ui/avatar";
 import { AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import { Button } from "../ui/button";
+import MapChat from "../chat/MapChat";
 
 type MapType = "roadmap" | "hybrid";
 
@@ -34,6 +35,7 @@ export const Map: React.FC<{ user: User }> = ({ user }) => {
 
 	return (
 		<div
+			className="z-10"
 			style={{
 				width: "100%",
 				height: "100%",
@@ -65,7 +67,13 @@ export const Map: React.FC<{ user: User }> = ({ user }) => {
 };
 
 const NearUserMarker = ({ user }: { user: NearerUser }) => {
-	console.log(user, "this is user in near user maker");
+	const [isChatOpen, setIsChatOpen] = useState(false);
+	const handleChatOpen = () => {
+		setIsChatOpen(true);
+	};
+	const handleChatClose = () => {
+		setIsChatOpen(false);
+	};
 	const initialIcon = L.divIcon({
 		className: "nearUserMarker",
 		html: AvatarLogo({
@@ -75,37 +83,50 @@ const NearUserMarker = ({ user }: { user: NearerUser }) => {
 		}),
 	});
 	return (
-		<Marker
-			position={{ lat: user.location.latitude, lng: user.location.longitude }}
-			icon={initialIcon}
-			zIndexOffset={1000}
-		>
-			<Popup>
-				<div>
-					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-2">
-							<Avatar>
-								<AvatarImage src={user.image} />
-								<AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-							</Avatar>
-							<span className="text-sm font-semibold">{user.name}</span>
+		<>
+			{isChatOpen && (
+				<MapChat
+					user={user}
+					handleCloseChat={handleChatClose}
+				/>
+			)}
+			<Marker
+				position={{ lat: user.location.latitude, lng: user.location.longitude }}
+				icon={initialIcon}
+				zIndexOffset={1000}
+			>
+				<Popup>
+					<div>
+						<div className="flex items-center justify-between">
+							<div className="flex items-center gap-2">
+								<Avatar>
+									<AvatarImage src={user.image} />
+									<AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+								</Avatar>
+								<span className="text-sm font-semibold">{user.name}</span>
+							</div>
+							<Button
+								className="!px-2 text-xs"
+								onClick={handleChatOpen}
+							>
+								Chat
+							</Button>
 						</div>
-						<Button className="!px-2 text-xs">Chat</Button>
+						<div className="flex items-center gap-2 !mt-2">
+							{user.interests.length > 0 &&
+								user.interests.map((interest) => (
+									<span
+										key={interest}
+										className="border-2 rounded-md !p-2 text-sm tracking-tight font-semibold"
+									>
+										{interest}
+									</span>
+								))}
+						</div>
 					</div>
-					<div className="flex items-center gap-2 !mt-2">
-						{user.interests.length > 0 &&
-							user.interests.map((interest) => (
-								<span
-									key={interest}
-									className="border-2 rounded-md !p-2 text-sm tracking-tight font-semibold"
-								>
-									{interest}
-								</span>
-							))}
-					</div>
-				</div>
-			</Popup>
-		</Marker>
+				</Popup>
+			</Marker>
+		</>
 	);
 };
 
