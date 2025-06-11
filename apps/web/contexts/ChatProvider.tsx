@@ -19,6 +19,8 @@ import {
 	REQUEST_JOIN_CALL,
 } from "socket-events";
 import EventEmitter from "events";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 const ChatContext = createContext<{
 	chats: Chat[];
@@ -70,19 +72,103 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 		toast(`New message from ${user.name}`);
 	};
 
-	const handleRemoveUserFromChat = (
-		chatId: string,
-		removedUserId: string
-	) => {};
+	const handleRemoveUserFromChat = (chatId: string, removedUserId: string) => {
+		setChats((prev) =>
+			prev.map((chat) => {
+				chat.id === chatId &&
+					chat.participants.filter(
+						(participant) => participant.id != removedUserId
+					);
+				return chat;
+			})
+		);
+	};
 
-	const handleLeaveCall = (userId: string) => {};
-
-	const handleIncomingCall = (chatId: string, requestedUser: User) => {};
-	const handleRequestJoinCall = (requestedBy: User) => {};
-	const handleIncomingCallAccepted = (chatId: string, acceptedUser: User) => {};
-	const handleIncomingCallJoinRequest = (senderUser: User) => {};
-	const handleIncomingCallJoinAccepted = (chatId: string) => {};
-	const handleRejectIncomingJoinRequest = (rejectedBy: User) => {};
+	const handleIncomingCall = (chatId: string, requestedUser: User) => {
+		const chat = {
+			id: chatId,
+			participants: [requestedUser],
+			name: requestedUser.name,
+		} as Chat;
+		toast("📞 Incoming call", {
+			description: (
+				<div>
+					<div className="flex items-center justify-start gap-2">
+						<Avatar>
+							<AvatarImage src={requestedUser.image} />
+							<AvatarFallback>{requestedUser.name}</AvatarFallback>
+						</Avatar>
+						<span>{requestedUser.name}</span>
+					</div>
+					<div className="flex gap-2 items-center">
+						{requestedUser.interests.length > 0 &&
+							requestedUser.interests.map((interest) => (
+								<span className="text-sm font-semibold">{interest}</span>
+							))}
+					</div>
+				</div>
+			),
+			action: (
+				<>
+					<Button>Accept</Button>
+					<Button>Reject</Button>
+				</>
+			),
+		});
+		setChats((prev) => [...prev, chat]);
+	};
+	const handleRequestJoinCall = (requestedUser: User, chatId: string) => {
+		const chat = {
+			id: chatId,
+			participants: [requestedUser],
+			name: requestedUser.name,
+		} as Chat;
+		toast("📞 Request to Join call", {
+			description: (
+				<div>
+					<div className="flex items-center justify-start gap-2">
+						<Avatar>
+							<AvatarImage src={requestedUser.image} />
+							<AvatarFallback>{requestedUser.name}</AvatarFallback>
+						</Avatar>
+						<span>{requestedUser.name}</span>
+					</div>
+					<div className="flex gap-2 items-center">
+						{requestedUser.interests.length > 0 &&
+							requestedUser.interests.map((interest) => (
+								<span className="text-sm font-semibold">{interest}</span>
+							))}
+					</div>
+				</div>
+			),
+			action: (
+				<>
+					<Button>Accept</Button>
+					<Button>Reject</Button>
+				</>
+			),
+		});
+	};
+	const handleIncomingCallAccepted = (chatId: string, acceptedUser: User) => {
+		// send socket events for rtp capabilities
+	};
+	const handleIncomingCallJoinRequest = (senderUser: User, chatId: string) => {
+		//TODO: not sure: logic
+		setChats((prev) =>
+			prev.map((chat) => {
+				chat.id === chatId && chat.participants.push(senderUser);
+				return chat;
+			})
+		);
+	};
+	const handleIncomingCallJoinAccepted = (chatId: string) => {
+		//TODO: do other logics too
+		toast("Join call accepted.");
+	};
+	const handleRejectIncomingJoinRequest = (rejectedBy: User) => {
+		//TODO: do other logics too
+		toast("Join call rejected.");
+	};
 	const handleRtpCapabilities = (chatId: string, rtpCapabilities: any) => {};
 	const handleProducerTransportCreated = (params: any) => {};
 	const handleProducedMedia = (
@@ -123,7 +209,7 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 						eventEmitter.emit(DELETE_MESSAGE_FROM_CHAT, {
 							messageId: payload.messageId,
 							deletedBy: payload.by,
-							chatId: payload.chatId
+							chatId: payload.chatId,
 						});
 						break;
 					}
@@ -132,7 +218,7 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 						break;
 					}
 					case LEAVE_CALL: {
-						handleLeaveCall(payload.leftUserId);
+						handleRemoveUserFromChat(payload.chatId, payload.leftUserId);
 						break;
 					}
 					case INCOMING_CALL: {
@@ -141,7 +227,7 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 						break;
 					}
 					case REQUEST_JOIN_CALL: {
-						handleRequestJoinCall(payload.requestBy);
+						handleRequestJoinCall(payload.requestBy, payload.chatId);
 						break;
 					}
 					case INCOMING_CALL_ACCEPTED: {
@@ -154,7 +240,7 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 						break;
 					}
 					case INCOMING_CALL_JOIN_REQUEST: {
-						handleIncomingCallJoinRequest(payload.from);
+						handleIncomingCallJoinRequest(payload.from, payload.chatId);
 						break;
 					}
 					case INCOMING_CALL_JOIN_ACCEPTED: {
