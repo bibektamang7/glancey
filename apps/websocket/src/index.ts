@@ -17,7 +17,6 @@ const websocketHandle: WebSocketHandler<SocketData> = {
 			ws.data.user.name
 		);
 		userManager.addUser(socketUser);
-		console.log("Socket user created.");
 	},
 	message(ws, message) {
 		handleMessage(ws, message);
@@ -45,7 +44,6 @@ const server = Bun.serve({
 			return new Response("Unathenticated");
 		}
 		const user = getUserFromToken(token);
-		console.log(user, "This is user form next auth");
 		if (!user) return new Response("Invalid token", { status: 403 });
 		const success = server.upgrade(req, {
 			data: {

@@ -27,7 +27,7 @@ interface UserLocation {
 export class User {
 	public userId: string;
 	private socket: ServerWebSocket<SocketData>;
-	public username: string;
+	public name: string;
 	private location?: UserLocation;
 	private image: string;
 	public interests: string[];
@@ -36,13 +36,13 @@ export class User {
 		userId: string,
 		socket: ServerWebSocket<SocketData>,
 		image: string,
-		username: string
+		name: string
 	) {
 		this.userId = userId;
 		this.socket = socket;
 		this.image = image;
 		this.interests = [];
-		this.username = username;
+		this.name = name;
 	}
 	setInterests(interests: string[]) {
 		this.interests.push(...interests);
@@ -80,13 +80,14 @@ export class User {
 			const membersSocket = userManager.getAllUsers(members);
 			//TODO: ASSUMING members HOLDS MEMBER VALUE STORED ON GEO_ADD
 			membersSocket.forEach((member) => {
+				if (member.userId === this.userId) return;
 				member.getSocket().send(
 					JSON.stringify({
 						type: USER_MOVEMENT,
 						payload: {
 							user: {
 								id: this.userId,
-								username: this.username,
+								name: this.name,
 								image: this.image,
 								interests: this.interests,
 								location: this.location,
@@ -95,15 +96,17 @@ export class User {
 					})
 				);
 			});
-			const usersInfo = extractUserInfo(membersSocket);
-			this.socket.send(
-				JSON.stringify({
-					type: USERS_NEAR_YOU,
-					payload: {
-						aroundUsers: usersInfo,
-					},
-				})
-			);
+			const usersInfo = extractUserInfo(membersSocket, this.userId);
+			if (usersInfo.length > 0) {
+				this.socket.send(
+					JSON.stringify({
+						type: USERS_NEAR_YOU,
+						payload: {
+							aroundUsers: usersInfo,
+						},
+					})
+				);
+			}
 		} catch (error) {
 			console.error("Couldn't update location of user", error);
 		}
@@ -113,21 +116,23 @@ export class User {
 interface UserInfo {
 	id: string;
 	image: string;
-	username: string;
+	name: string;
 	interests: string[];
 	location: UserLocation | undefined;
 }
 
-const extractUserInfo = (users: User[]) => {
+const extractUserInfo = (users: User[], currentUserId: string) => {
 	const infos = users.reduce((acc: UserInfo[], currentUser) => {
-		const info = {
-			id: currentUser.userId,
-			username: currentUser.username,
-			image: currentUser.getImage(),
-			interests: currentUser.interests,
-			location: currentUser.getLocation(),
-		};
-		acc.push(info);
+		if (currentUserId !== currentUser.userId) {
+			const info = {
+				id: currentUser.userId,
+				name: currentUser.name,
+				image: currentUser.getImage(),
+				interests: currentUser.interests,
+				location: currentUser.getLocation(),
+			};
+			acc.push(info);
+		}
 		return acc;
 	}, []);
 	return infos;
@@ -147,8 +152,7 @@ class UserManager {
 		return UserManager.instance;
 	}
 	async addUser(user: User) {
-		const userId = user.getUserId();
-		this.onlineUsers.set(userId, user);
+		this.onlineUsers.set(user.userId, user);
 		// try {
 		// 	await redisClient.geoAdd(`users:location`, {
 		// 		longitude: location.longitude,
@@ -159,12 +163,8 @@ class UserManager {
 		// 	console.log("couldn't add user in redis", error);
 		// }
 	}
-	getUser(userId: string): User | null {
-		this.onlineUsers.forEach((user) => {
-			const id = user.getUserId();
-			if (userId === id) return user;
-		});
-		return null;
+	getUser(userId: string): User | undefined {
+		return this.onlineUsers.get(userId);
 	}
 	async removeUser(user: User) {
 		const userId = user.getUserId();

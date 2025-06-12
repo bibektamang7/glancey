@@ -50,7 +50,7 @@ socketSubClient.subscribe("mediasoup:producerConnected", async (message) => {
 	if (socketUser) {
 		socketUser.getSocket().send(
 			JSON.stringify({
-				type: "",
+				type: "producer_connected",
 				payload: {
 					message: parsedData.message,
 					chatId: parsedData.chatId,
@@ -75,7 +75,7 @@ socketSubClient.subscribe("mediasoup:produced", async (message) => {
 					user: {
 						id: socketUser.userId,
 						image: socketUser.getImage(),
-						username: socketUser.username,
+						name: socketUser.name,
 					},
 					chatId: chat.chatId,
 					producerId: parsedData.producerId,

@@ -22,7 +22,6 @@ import {
 	REJECT_START_CALL,
 	REMOVE_USER_FROM_CHAT,
 	REMOVED_FROM_CHAT,
-	REQUEST_CHAT_MESSAGE,
 	REQUEST_JOIN_CALL,
 	REQUEST_START_CALL,
 	RESUME_TRANSPORT,
@@ -53,6 +52,7 @@ export const handleMessage = async (
 	const parsedMessage = JSON.parse(String(message));
 	const payload = parsedMessage.payload;
 	const senderUser = userManager.getUser(payload.sender);
+
 	if (!senderUser) return;
 	switch (parsedMessage.type) {
 		case SET_INTERESTS_AND_LOCATION: {
@@ -71,29 +71,8 @@ export const handleMessage = async (
 			}
 			break; // ✅✅✅
 
-		case REQUEST_CHAT_MESSAGE:
-			const requestedSocket = userManager.getUser(payload.requestTo);
-			if (requestedSocket) {
-				const userId = senderUser.getUserId();
-				const chat = chatManager.createChat(userId, senderUser);
-				chat.addParticipant(requestedSocket);
-				requestedSocket.getSocket().send(
-					JSON.stringify({
-						type: REQUEST_CHAT_MESSAGE,
-						payload: {
-							requestBy: {
-								id: senderUser.getUserId(),
-								location: senderUser.getLocation(),
-								image: senderUser.getImage(),
-								interests: senderUser.getInterests(),
-								username: senderUser.username,
-							},
-						},
-					})
-				);
-			}
-			break;
 		case SEND_MESSAGE_IN_CHAT: {
+			const requestedSocket = userManager.getUser(payload.requestTo);
 			const chat = chatManager.getChat(payload.chatId);
 			if (chat) {
 				const senderUserId = senderUser.getUserId();
@@ -104,14 +83,38 @@ export const handleMessage = async (
 							sender: {
 								id: senderUser.getUserId(),
 								image: senderUser.getImage(),
-								username: senderUser.username,
+								name: senderUser.name,
 							},
 							messageId: senderUserId,
 							content: payload.content,
+							chatId: chat.chatId,
 						},
 					}),
 					senderUserId
 				);
+			} else {
+				const createdChat = chatManager.createChat(
+					senderUser.userId,
+					senderUser
+				);
+				if (requestedSocket) {
+					createdChat.addParticipant(requestedSocket);
+					requestedSocket.getSocket().send(
+						JSON.stringify({
+							type: RECEIVE_MESSAGE_IN_CHAT,
+							payload: {
+								sender: {
+									id: senderUser.getUserId(),
+									image: senderUser.getImage(),
+									name: senderUser.name,
+								},
+								messageId: senderUser.userId,
+								content: payload.content,
+								chatId: createdChat.chatId,
+							},
+						})
+					);
+				}
 			}
 			break;
 		}
@@ -124,6 +127,8 @@ export const handleMessage = async (
 						type: DELETE_MESSAGE_FROM_CHAT,
 						payload: {
 							messageId: payload.messageId,
+							by: senderUser.userId,
+							chatId: chat.chatId,
 						},
 					}),
 					senderUserId
@@ -146,6 +151,7 @@ export const handleMessage = async (
 								type: REMOVED_FROM_CHAT,
 								payload: {
 									chatId: chat.chatId,
+									removedUserId: requestUser.userId,
 								},
 							})
 						);
@@ -165,11 +171,8 @@ export const handleMessage = async (
 						JSON.stringify({
 							type: LEAVE_CALL,
 							payload: {
-								leftBy: {
-									id: senderUser.getUserId(),
-									image: senderUser.getImage(),
-									username: senderUser.username,
-								},
+								chatId: chat.chatId,
+								leftUserId: senderUser.userId,
 							},
 						}),
 						socketUserId
@@ -191,7 +194,8 @@ export const handleMessage = async (
 									requestBy: {
 										id: senderUser.getUserId(),
 										image: senderUser.getImage(),
-										username: senderUser.username,
+										name: senderUser.name,
+										interests: senderUser.interests,
 									},
 								},
 							}),
@@ -210,7 +214,7 @@ export const handleMessage = async (
 								requestBy: {
 									id: senderUser.getUserId(),
 									image: senderUser.getImage(),
-									username: senderUser.username,
+									name: senderUser.name,
 								},
 							},
 						})
@@ -246,7 +250,7 @@ export const handleMessage = async (
 								acceptedBy: {
 									userId: senderUser.userId,
 									image: senderUser.getImage(),
-									username: senderUser.username,
+									name: senderUser.name,
 								},
 							},
 						})
@@ -272,7 +276,7 @@ export const handleMessage = async (
 							payload: {
 								rejectedBy: {
 									id: senderUser.getUserId(),
-									username: senderUser.username,
+									name: senderUser.name,
 									image: senderUser.getImage(),
 								},
 							},
@@ -290,9 +294,13 @@ export const handleMessage = async (
 						JSON.stringify({
 							type: INCOMING_CALL_JOIN_REQUEST,
 							payload: {
-								id: senderUser.getUserId(),
-								username: senderUser.username,
-								image: senderUser.getImage(),
+								from: {
+									id: senderUser.getUserId(),
+									name: senderUser.name,
+									image: senderUser.getImage(),
+									interests: senderUser.interests,
+								},
+								chatId: chat.chatId,
 							},
 						})
 					);
@@ -342,7 +350,8 @@ export const handleMessage = async (
 							type: REJECT_INCOMING_CALL_JOIN_REQUEST,
 							payload: {
 								rejectedBy: {
-									username: senderUser.username,
+									id: senderUser.userId,
+									name: senderUser.name,
 									iamge: senderUser.getImage(),
 								},
 							},
