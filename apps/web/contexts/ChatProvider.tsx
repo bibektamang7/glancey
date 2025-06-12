@@ -20,6 +20,7 @@ import {
 import EventEmitter from "events";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import MapChat from "@/components/chat/MapChat";
 
 const ChatContext = createContext<{
 	chats: Chat[];
@@ -46,6 +47,15 @@ eventEmitter.setMaxListeners(20);
 const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 	const { socket } = useSocket();
 	const [chats, setChats] = useState<Chat[]>([]);
+	const [openChat, setOpenChat] = useState<{
+		isChatOpen: boolean;
+		user: User | null;
+		chatId: string;
+	}>({
+		isChatOpen: false,
+		user: null,
+		chatId: "",
+	});
 
 	const handleSetChat = (chat: Chat) => {
 		setChats((prev) => [...prev, chat]);
@@ -187,7 +197,6 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
 					toast("🔖 New message", {
 						style: {
-							// background: "var(--color-slate-800)",
 							width: "fit-content",
 						},
 						description: (
@@ -204,15 +213,26 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 								</div>
 							</div>
 						),
+						actionButtonStyle: { backgroundColor: "var(--color-blue-500)" },
+						action: {
+							label: "Open",
+							onClick: () => {
+								setOpenChat({
+									isChatOpen: true,
+									user: payload.sender,
+									chatId: payload.chatId,
+								});
+							},
+						},
 					});
 				} else {
-					setChats((prev) =>
-						prev.map((chat) =>
-							chat.id === payload.chatId
-								? ({ ...chat, messages: [...chat.messages, message] } as Chat)
-								: chat
-						)
-					);
+					// setChats((prev) =>
+					// 	prev.map((chat) =>
+					// 		chat.id === payload.chatId
+					// 			? ({ ...chat, messages: [...chat.messages, message] } as Chat)
+					// 			: chat
+					// 	)
+					// );
 				}
 
 				eventEmitter.emit(RECEIVE_MESSAGE_IN_CHAT, {
@@ -317,12 +337,17 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 		};
 	}, [socket, chats]);
 
-	useEffect(() => {
-		console.log("chat change means message");
-	}, [chats]);
-
 	return (
 		<ChatContext.Provider value={{ chats, handleSetChat }}>
+			{openChat.isChatOpen && (
+				<MapChat
+					handleCloseChat={() =>
+						setOpenChat({ isChatOpen: false, user: null, chatId: "" })
+					}
+					user={openChat.user!}
+					chatId={openChat.chatId}
+				/>
+			)}
 			{children}
 		</ChatContext.Provider>
 	);
