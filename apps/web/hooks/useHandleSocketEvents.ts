@@ -22,7 +22,8 @@ export const useHandleSocketEvents = () => {
 		setNearUsers(users);
 	};
 
-	const handleEventMessage = (message: any) => {
+	const handleEventMessage = (event: MessageEvent<any>) => {
+		const message = JSON.parse(event.data);
 		const payload = message.payload;
 		switch (message.type) {
 			case USER_MOVEMENT: {
@@ -38,9 +39,11 @@ export const useHandleSocketEvents = () => {
 
 	useEffect(() => {
 		if (!socket) return;
-		socket.onmessage = (event) => {
-			const message = JSON.parse(event.data);
-			handleEventMessage(message);
+		socket.addEventListener("message", handleEventMessage);
+		return () => {
+			if (socket) {
+				socket.removeEventListener("message", handleEventMessage);
+			}
 		};
 	}, [socket]);
 	return { socket, nearUsers };
