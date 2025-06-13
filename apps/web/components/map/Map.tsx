@@ -106,7 +106,7 @@ const NearUserMarker = ({ user }: { user: NearerUser }) => {
 								<span className="text-sm font-semibold">{user.name}</span>
 							</div>
 							<Button
-								className="!px-2 text-xs"
+								className="!px-2 text-xs hover:cursor-pointer"
 								onClick={handleChatOpen}
 							>
 								Chat
