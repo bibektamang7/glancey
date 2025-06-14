@@ -59,6 +59,7 @@ export const Map: React.FC<{ user: User }> = ({ user }) => {
 						<NearUserMarker
 							key={user.id}
 							user={user}
+							currentUserId={data.user?.id!}
 						/>
 					))}
 			</MapContainer>
@@ -66,7 +67,13 @@ export const Map: React.FC<{ user: User }> = ({ user }) => {
 	);
 };
 
-const NearUserMarker = ({ user }: { user: NearerUser }) => {
+const NearUserMarker = ({
+	user,
+	currentUserId,
+}: {
+	user: NearerUser;
+	currentUserId: string;
+}) => {
 	const [isChatOpen, setIsChatOpen] = useState(false);
 	const handleChatOpen = () => {
 		setIsChatOpen(true);
@@ -88,6 +95,7 @@ const NearUserMarker = ({ user }: { user: NearerUser }) => {
 				<MapChat
 					user={user}
 					handleCloseChat={handleChatClose}
+					chatId={`${user.id}-${currentUserId}`}
 				/>
 			)}
 			<Marker

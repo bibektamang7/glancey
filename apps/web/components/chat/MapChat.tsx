@@ -27,21 +27,21 @@ const MapChat = ({
 }: {
 	handleCloseChat: () => void;
 	user: User;
-	chatId?: string;
+	chatId: string;
 }) => {
 	const session = useSession();
 	const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
-	const { chats, handleSetChat } = useMapChat();
+	const { chats, handleSetChat, handleSetMessage } = useMapChat();
 	const { socket } = useSocket();
 	const [messages, setMessages] = useState<Message[]>([]);
-	const chat = !chatId
-		? ({
-				id: user.id,
-				name: user.name,
-				participants: [user],
-				messages: [],
-			} as unknown as Chat)
-		: chats.find((chat) => chat.id === chatId);
+	// const chat =
+	// 	chats.find((chat) => chat.id === chatId) ??
+	// 	({
+	// 		id: `${user.id}-${session.data?.user?.id}`,
+	// 		name: user.name,
+	// 		participants: [user],
+	// 		messages: [],
+	// 	} as unknown as Chat);
 
 	const handleSendMessage = () => {
 		if (messageInputRef.current && socket && session.data?.user) {
@@ -54,6 +54,7 @@ const MapChat = ({
 						content: messageInputRef.current.value,
 						requestTo: user.id,
 						sender: session.data.user.id,
+						chatId,
 					},
 				})
 			);
@@ -64,6 +65,7 @@ const MapChat = ({
 				sender: session.data.user,
 			} as Message;
 			setMessages((prev) => [...prev, message]);
+			handleSetMessage(message, chatId);
 		}
 	};
 	const handleInput = () => {
@@ -86,20 +88,34 @@ const MapChat = ({
 		content: string;
 		chatId: string;
 	}) => {
-		const message = {
-			id: payload.messageId,
-			content: payload.content,
-			createdAt: new Date(),
-			sender: payload.sender,
-		} as Message;
-		setMessages((prev) => [...prev, message]);
+		if (payload.chatId === chatId) {
+			const message = {
+				id: payload.messageId,
+				content: payload.content,
+				createdAt: new Date(),
+				sender: payload.sender,
+			} as Message;
+			setMessages((prev) => [...prev, message]);
+		}
 	};
 
 	useEffect(() => {
-		if (!chatId) {
-			handleSetChat(chat!);
+		const chat = chats.find(
+			(chat) =>
+				chat.id === chatId || chat.id === `${session.data?.user?.id}-${user.id}`
+		);
+		console.log(chats, "this is chats");
+		if (!chat) {
+			const newChat = {
+				id: chatId,
+				name: user.name,
+				participants: [user],
+				messages: [],
+			} as unknown as Chat;
+			handleSetChat(newChat);
 		} else {
-			chat && setMessages(chat.messages!);
+			console.log("existed chat messagee");
+			setMessages(chat.messages);
 		}
 	}, []);
 
@@ -110,7 +126,7 @@ const MapChat = ({
 		};
 	}, []);
 	return (
-		<section className="h-screen max-h-screen w-full absolute right-0 top-0 lg:w-[30%] md:w-[40%] z-[500] rounded-lg">
+		<section className="h-screen max-h-screen w-full absolute right-0 top-0 lg:w-[30%] md:w-[40%] z-[1000] rounded-lg">
 			<div className="h-full flex flex-col">
 				<div className="flex items-center justify-between !p-4 border-b bg-white ">
 					<div className="flex items-center gap-3">
@@ -156,13 +172,13 @@ const MapChat = ({
 							key={message.id}
 							className={cn(
 								"flex",
-								message.sender.id === "me" ? "justify-end" : "justify-start"
+								message.sender.id !== user.id ? "justify-end" : "justify-start"
 							)}
 						>
 							<div
 								className={cn(
 									"max-w-[70%] rounded-lg !px-4 !py-2",
-									message.sender.id === "me"
+									message.sender.id !== user.id
 										? "bg-blue-500 text-white"
 										: "bg-white text-gray-900 border"
 								)}
@@ -172,7 +188,7 @@ const MapChat = ({
 									<span
 										className={cn(
 											"text-xs",
-											message.sender.id === "me"
+											message.sender.id !== user.id
 												? "text-blue-100"
 												: "text-gray-500"
 										)}

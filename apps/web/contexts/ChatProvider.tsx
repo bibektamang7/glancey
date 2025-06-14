@@ -25,10 +25,14 @@ import MapChat from "@/components/chat/MapChat";
 const ChatContext = createContext<{
 	chats: Chat[];
 	handleSetChat: (chat: Chat) => void;
+	handleSetMessage: (message: Message, chatId: string) => void;
 }>({
 	chats: [],
 	handleSetChat: () => {
 		console.log("Set function");
+	},
+	handleSetMessage: (message: Message, chatId: string) => {
+		console.log("Set message function");
 	},
 });
 
@@ -59,6 +63,16 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
 	const handleSetChat = (chat: Chat) => {
 		setChats((prev) => [...prev, chat]);
+	};
+
+	const handleSetMessage = (message: Message, chatId: string) => {
+		setChats((prev) =>
+			prev.map((chat) =>
+				chat.id === chatId
+					? ({ ...chat, messages: [...chat.messages, message] } as Chat)
+					: chat
+			)
+		);
 	};
 
 	const handleRemoveUserFromChat = (chatId: string, removedUserId: string) => {
@@ -183,7 +197,7 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 					sender: payload.sender,
 				} as Message;
 				const chat = chats.find((chat) => chat.id === payload.chatId);
-				console.log("this is chat", chats);
+				console.log("this is chat", chat);
 				if (!chat) {
 					const newChat = {
 						id: payload.chatId,
@@ -192,7 +206,6 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 						name: payload.sender.name,
 						participants: [payload.sender],
 					} as Chat;
-					console.log(newChat, "this is new chat");
 					setChats((prev) => [...prev, newChat]);
 
 					toast("🔖 New message", {
@@ -226,13 +239,13 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 						},
 					});
 				} else {
-					// setChats((prev) =>
-					// 	prev.map((chat) =>
-					// 		chat.id === payload.chatId
-					// 			? ({ ...chat, messages: [...chat.messages, message] } as Chat)
-					// 			: chat
-					// 	)
-					// );
+					setChats((prev) =>
+						prev.map((chat) =>
+							chat.id === payload.chatId
+								? ({ ...chat, messages: [...chat.messages, message] } as Chat)
+								: chat
+						)
+					);
 				}
 
 				eventEmitter.emit(RECEIVE_MESSAGE_IN_CHAT, {
@@ -338,7 +351,7 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 	}, [socket, chats]);
 
 	return (
-		<ChatContext.Provider value={{ chats, handleSetChat }}>
+		<ChatContext.Provider value={{ chats, handleSetChat, handleSetMessage }}>
 			{openChat.isChatOpen && (
 				<MapChat
 					handleCloseChat={() =>
