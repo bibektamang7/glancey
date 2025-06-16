@@ -1,6 +1,10 @@
 import {
-	ACCEPT_JOIN_CALL,
-	ACCEPT_START_CALL,
+	ACCEPT_AUDIO_CALL,
+	ACCEPT_INCOMING_AUDIO_CALL,
+	ACCEPT_INCOMING_VIDEO_CALL,
+	ACCEPT_VIDEO_CALL,
+	AUDIO_CALL_ACCEPTED,
+	AUDIO_CALL_REJECTED,
 	CONNECT_CONSUMER,
 	CONNECT_CONSUMER_TRANSPORT,
 	CONNECT_PRODUCER,
@@ -8,29 +12,27 @@ import {
 	CREATE_CONSUMER_TRANSPORT,
 	CREATE_PRODUCER_TRANSPORT,
 	DELETE_MESSAGE_FROM_CHAT,
-	GET_ROUTER_RTP_CAPABILITIES,
-	INCOMING_CALL,
-	INCOMING_CALL_ACCEPTED,
-	INCOMING_CALL_JOIN_ACCEPTED,
-	INCOMING_CALL_JOIN_REQUEST,
-	INCOMING_CALL_REJECTED,
+	INCOMING_AUDIO_CALL,
+	INCOMING_VIDEO_CALL,
 	LEAVE_CALL,
 	MOVEMENT,
 	RECEIVE_MESSAGE_IN_CHAT,
-	REJECT_INCOMING_CALL_JOIN_REQUEST,
-	REJECT_JOIN_CALL,
-	REJECT_START_CALL,
+	REJECT_AUDIO_CALL,
+	REJECT_INCOMING_AUDIO_CALL,
+	REJECT_INCOMING_VIDEO_CALL,
+	REJECT_VIDEO_CALL,
 	REMOVE_USER_FROM_CHAT,
 	REMOVED_FROM_CHAT,
-	REQUEST_JOIN_CALL,
-	REQUEST_START_CALL,
+	REQUEST_AUDIO_CALL,
+	REQUEST_VIDEO_CALL,
 	RESUME_TRANSPORT,
 	SEND_MESSAGE_IN_CHAT,
 	SET_INTERESTS_AND_LOCATION,
+	VIDEO_CALL_REJECTED,
 } from "socket-events";
 import type { SocketData } from "../src";
 import { userManager } from "../src/user";
-import { Chat, chatManager } from "../src/chat";
+import { chatManager } from "../src/chat";
 import { createClient } from "redis-config";
 
 import "../src/redisSubscribe";
@@ -72,7 +74,6 @@ export const handleMessage = async (
 			break; // ✅✅✅
 
 		case SEND_MESSAGE_IN_CHAT: {
-			const requestedSocket = userManager.getUser(payload.requestTo);
 			const chat = chatManager.getChat(payload.chatId);
 			if (chat) {
 				const senderUserId = senderUser.getUserId();
@@ -85,7 +86,7 @@ export const handleMessage = async (
 								image: senderUser.getImage(),
 								name: senderUser.name,
 							},
-							messageId: senderUserId,
+							messageId: payload.messageId,
 							content: payload.content,
 							chatId: chat.chatId,
 						},
@@ -93,10 +94,8 @@ export const handleMessage = async (
 					senderUserId
 				);
 			} else {
-				const createdChat = chatManager.createChat(
-					senderUser.userId,
-					senderUser
-				);
+				const requestedSocket = userManager.getUser(payload.requestTo);
+				const createdChat = chatManager.createChat(payload.chatId, senderUser);
 				if (requestedSocket) {
 					createdChat.addParticipant(requestedSocket);
 					requestedSocket.getSocket().send(
@@ -180,198 +179,312 @@ export const handleMessage = async (
 				}
 			}
 			break;
-		case REQUEST_START_CALL:
-			{
-				if (payload.chatId && senderUser) {
-					const chat = chatManager.getChat(payload.chatId);
-					if (chat) {
-						chat.addParticipantInCall(senderUser);
-						chat.broadcastMessage(
-							JSON.stringify({
-								type: INCOMING_CALL,
-								payload: {
-									chatId: chat.chatId,
-									requestBy: {
-										id: senderUser.getUserId(),
-										image: senderUser.getImage(),
-										name: senderUser.name,
-										interests: senderUser.interests,
-									},
-								},
-							}),
-							senderUser.userId
-						);
-					}
-					break;
-				}
 
-				const receiverUser = userManager.getUser(payload.requestTo);
-				if (receiverUser) {
-					receiverUser.getSocket().send(
-						JSON.stringify({
-							type: REQUEST_JOIN_CALL,
-							payload: {
-								requestBy: {
-									id: senderUser.getUserId(),
-									image: senderUser.getImage(),
-									name: senderUser.name,
-								},
-							},
-						})
-					);
-				}
-			}
-			break;
-		case ACCEPT_START_CALL:
-			{
-				const acceptedToUser = userManager.getUser(payload.acceptedTo);
-				if (acceptedToUser) {
-					const adminId = acceptedToUser.getUserId();
-					let chat: Chat | undefined;
-					if (payload.chatId) {
-						chat = chatManager.getChat(payload.chatId);
-						chat?.addParticipantInCall(senderUser);
-					}
-					chat = chatManager.createChat(adminId, acceptedToUser);
-
-					// add paricipants in chat's space
-					chat.addParticipant(senderUser);
-					chat.addParticipant(acceptedToUser);
-
-					// add paricipants in chat's call
-					chat.addParticipantInCall(senderUser);
-					chat.addParticipantInCall(acceptedToUser);
-
-					acceptedToUser.getSocket().send(
-						JSON.stringify({
-							type: INCOMING_CALL_ACCEPTED,
-							payload: {
-								chatId: chat.chatId,
-								acceptedBy: {
-									userId: senderUser.userId,
-									image: senderUser.getImage(),
-									name: senderUser.name,
-								},
-							},
-						})
-					);
-
-					await socketPubClient.publish(
-						"mediasoup:getRouterRtpCapabilities",
-						JSON.stringify({
-							chatId: chat.chatId,
-							userId: senderUser.userId,
-						})
-					);
-				}
-			}
-			break;
-		case REJECT_START_CALL:
-			{
-				const rejectedTo = userManager.getUser(payload.rejectedTo);
-				if (rejectedTo) {
-					rejectedTo.getSocket().send(
-						JSON.stringify({
-							type: INCOMING_CALL_REJECTED,
-							payload: {
-								rejectedBy: {
-									id: senderUser.getUserId(),
-									name: senderUser.name,
-									image: senderUser.getImage(),
-								},
-							},
-						})
-					);
-				}
-			}
-			break;
-		case REQUEST_JOIN_CALL:
-			{
-				const chat = chatManager.getChat(payload.chatId);
-				if (chat) {
-					const chatAdmin = chat.admin;
-					chatAdmin.getSocket().send(
-						JSON.stringify({
-							type: INCOMING_CALL_JOIN_REQUEST,
-							payload: {
-								from: {
-									id: senderUser.getUserId(),
-									name: senderUser.name,
-									image: senderUser.getImage(),
-									interests: senderUser.interests,
-								},
-								chatId: chat.chatId,
-							},
-						})
-					);
-				}
-			}
-			break;
-		case ACCEPT_JOIN_CALL:
-			{
-				const acceptedTo = userManager.getUser(payload.acceptedTo);
-				const chat = chatManager.getChat(payload.chatId);
-				if (chat && acceptedTo) {
-					chat.addParticipantInCall(acceptedTo);
-					// TODO: may be some delay here,
-					// to notify users in call
-					// TODO: I don't think i should notify user now
-					// Notify user when user produce the mediasoup
-
-					await socketPubClient.publish(
-						"mediasoup:getRouterRtpCapabilities",
-						JSON.stringify({
-							userId: acceptedTo.userId,
-							chatId: chat.chatId,
-						})
-					);
-
-					acceptedTo.getSocket().send(
-						JSON.stringify({
-							type: INCOMING_CALL_JOIN_ACCEPTED,
-							payload: {
-								chatId: chat.chatId,
-							},
-						})
-					);
-
-					// chat.currentParticipantsInCall.forEach((participant) => {
-					// 	participant.getSocket().send(JSON.stringify({}));
-					// });
-				}
-			}
-			break;
-		case REJECT_JOIN_CALL:
-			{
-				const rejectedTo = userManager.getUser(payload.rejectedTo);
-				if (rejectedTo) {
-					rejectedTo.getSocket().send(
-						JSON.stringify({
-							type: REJECT_INCOMING_CALL_JOIN_REQUEST,
-							payload: {
-								rejectedBy: {
-									id: senderUser.userId,
-									name: senderUser.name,
-									iamge: senderUser.getImage(),
-								},
-							},
-						})
-					);
-				}
-			}
-			break;
-		case GET_ROUTER_RTP_CAPABILITIES: {
+		case REQUEST_AUDIO_CALL: {
+			console.log("here is come calling request");
 			const chat = chatManager.getChat(payload.chatId);
-			if (chat) {
-				const senderUserId = senderUser.getUserId();
+			if (senderUser && chat) {
+				chat.addParticipantInCall(senderUser);
+				chat.broadcastMessage(
+					JSON.stringify({
+						type: INCOMING_AUDIO_CALL,
+						payload: {
+							sender: {
+								id: senderUser.getUserId(),
+								image: senderUser.getImage(),
+								name: senderUser.name,
+								interests: senderUser.interests,
+							},
+							chatId: chat.chatId,
+						},
+					}),
+					senderUser.userId
+				);
+			} else {
+				const requestedUser = userManager.getUser(payload.requestTo);
+				if (!requestedUser) return;
+				const newChat = chatManager.createChat(payload.chatId, senderUser);
+				newChat.addParticipantInCall(senderUser);
+				newChat.addParticipant(requestedUser);
 
-				await socketPubClient.publish(
-					"mediasoup:getRouterRtpCapabilities",
-					JSON.stringify({ userId: senderUserId, chatId: chat.chatId })
+				if (!requestedUser) return;
+
+				requestedUser.getSocket().send(
+					JSON.stringify({
+						type: REQUEST_AUDIO_CALL,
+						payload: {
+							sender: {
+								id: senderUser.getUserId(),
+								image: senderUser.getImage(),
+								name: senderUser.name,
+								interests: senderUser.interests,
+							},
+							chatId: newChat.chatId,
+						},
+					})
 				);
 			}
+
+			await socketPubClient.publish(
+				"mediasoup:getRouterRtpCapabilities",
+				JSON.stringify({
+					chatId: payload.chatId,
+					userId: senderUser.userId,
+				})
+			);
 			break;
 		}
+		case ACCEPT_INCOMING_AUDIO_CALL: {
+			const acceptedTo = userManager.getUser(payload.acceptedTo);
+			const chat = chatManager.getChat(payload.chatId);
+			if (!chat || !acceptedTo) return;
+			//TODO: EXECUTE GETTING RTP CAPABILITES
+
+			//TODO: FOR MULTIPLE USER,
+			// it is not feasible,
+			// so later when you want to handle for multiple caller,
+			// send getRtpCapabilities, when initiate call
+
+			acceptedTo.getSocket().send(
+				JSON.stringify({
+					type: AUDIO_CALL_ACCEPTED,
+					payload: {
+						chatId: chat.chatId,
+						acceptedBy: {
+							id: senderUser.getUserId(),
+							image: senderUser.getImage(),
+							name: senderUser.name,
+						},
+					},
+				})
+			);
+			await socketPubClient.publish(
+				"mediasoup:getRouterRtpCapabilities",
+				JSON.stringify({
+					chatId: chat.chatId,
+					userId: senderUser.userId,
+				})
+			);
+			break;
+		}
+		case ACCEPT_AUDIO_CALL: {
+			const chat = chatManager.getChat(payload.chatId);
+			const acceptedUser = userManager.getUser(payload.acceptedBy);
+			if (!chat || !acceptedUser) return;
+			chat.addParticipantInCall(acceptedUser);
+
+			acceptedUser.getSocket().send(
+				JSON.stringify({
+					type: AUDIO_CALL_ACCEPTED,
+					payload: {
+						chatId: chat.chatId,
+						acceptedBy: {
+							id: senderUser.getUserId(),
+							image: senderUser.getImage(),
+							name: senderUser.name,
+						},
+					},
+				})
+			);
+			await socketPubClient.publish(
+				"mediasoup:getRouterRtpCapabilities",
+				JSON.stringify({
+					chatId: chat.chatId,
+					userId: senderUser.userId,
+				})
+			);
+			break;
+		}
+		case REJECT_INCOMING_AUDIO_CALL: {
+			const chat = chatManager.getChat(payload.chatId);
+			if (!chat) return;
+			chat.removeParticipantFromCall(senderUser);
+
+			chat.broadcastMessage(
+				JSON.stringify({
+					type: AUDIO_CALL_REJECTED,
+					payload: {
+						rejectedBy: {
+							id: senderUser.userId,
+							image: senderUser.getImage(),
+							name: senderUser.name,
+						},
+					},
+				}),
+				senderUser.userId
+			);
+			//TODO: REMOVE IN MEDIA SOUP
+			break;
+		}
+
+		case REJECT_AUDIO_CALL: {
+			const chat = chatManager.getChat(payload.chatId);
+			if (!chat) return;
+			//TODO: FOR NOW, NOT SURE WHAT TO DO
+
+			chat.broadcastMessage(
+				JSON.stringify({
+					type: AUDIO_CALL_REJECTED,
+					payload: {
+						rejectedBy: {
+							id: senderUser.userId,
+							image: senderUser.getImage(),
+							name: senderUser.name,
+						},
+					},
+				}),
+				senderUser.userId
+			);
+			chatManager.deleteChat(chat.chatId);
+			//TODO: REMOVE IN MEDIA SOUP
+			break;
+		}
+
+		case REQUEST_VIDEO_CALL: {
+			const chat = chatManager.getChat(payload.chatId);
+			if (senderUser && chat) {
+				chat.addParticipantInCall(senderUser);
+				chat.broadcastMessage(
+					JSON.stringify({
+						type: INCOMING_VIDEO_CALL,
+						payload: {
+							sender: {
+								id: senderUser.getUserId(),
+								image: senderUser.getImage(),
+								name: senderUser.name,
+							},
+							chatId: chat.chatId,
+						},
+					}),
+					senderUser.userId
+				);
+			} else {
+				const requestedUser = userManager.getUser(payload.requestTo);
+
+				if (!requestedUser) return;
+				const newChat = chatManager.createChat(payload.chatId, senderUser);
+				newChat.addParticipantInCall(senderUser);
+				newChat.addParticipant(requestedUser);
+
+				requestedUser.getSocket().send(
+					JSON.stringify({
+						type: REQUEST_VIDEO_CALL,
+						payload: {
+							sender: {
+								id: senderUser.getUserId(),
+								image: senderUser.getImage(),
+								name: senderUser.name,
+								interests: senderUser.interests,
+							},
+							chatId: newChat.chatId,
+						},
+					})
+				);
+			}
+
+			await socketPubClient.publish(
+				"mediasoup:getRouterRtpCapabilities",
+				JSON.stringify({
+					chatId: payload.chatId,
+					userId: senderUser.userId,
+				})
+			);
+			break;
+		}
+
+		case ACCEPT_INCOMING_VIDEO_CALL: {
+			const chat = chatManager.getChat(payload.chatId);
+			const acceptedUser = userManager.getUser(payload.acceptedTo);
+			if (!chat || !acceptedUser) return;
+
+			acceptedUser.getSocket().send(
+				JSON.stringify({
+					type: ACCEPT_VIDEO_CALL,
+					payload: {
+						chatId: chat.chatId,
+						acceptedBy: senderUser.userId,
+					},
+				})
+			);
+
+			await socketPubClient.publish(
+				"mediasoup:getRouterRtpCapabilities",
+				JSON.stringify({
+					chatId: chat.chatId,
+					userId: senderUser.userId,
+				})
+			);
+			break;
+		}
+		case ACCEPT_VIDEO_CALL: {
+			const chat = chatManager.getChat(payload.chatId);
+
+			const acceptedUser = userManager.getUser(payload.acceptedTo);
+			if (!chat || !acceptedUser) return;
+
+			acceptedUser.getSocket().send(
+				JSON.stringify({
+					type: ACCEPT_VIDEO_CALL,
+					payload: {
+						chatId: chat.chatId,
+						acceptedBy: senderUser.userId,
+					},
+				})
+			);
+			await socketPubClient.publish(
+				"mediasoup:getRouterRtpCapabilities",
+				JSON.stringify({
+					chatId: chat.chatId,
+					userId: senderUser.userId,
+				})
+			);
+			break;
+		}
+		case REJECT_INCOMING_VIDEO_CALL: {
+			const chat = chatManager.getChat(payload.chatId);
+			if (!chat) return;
+			chat.removeParticipantFromCall(senderUser);
+
+			chat.broadcastMessage(
+				JSON.stringify({
+					type: VIDEO_CALL_REJECTED,
+					payload: {
+						rejectedBy: {
+							id: senderUser.userId,
+							image: senderUser.getImage(),
+							name: senderUser.name,
+						},
+					},
+				}),
+				senderUser.userId
+			);
+			//TODO: REMOVE IN MEDIA SOUP
+			break;
+		}
+		case REJECT_VIDEO_CALL:
+			{
+				const chat = chatManager.getChat(payload.chatId);
+				if (!chat) return;
+
+				//TODO: FOR NOW, NOT SURE WHAT TO DO
+
+				chat.broadcastMessage(
+					JSON.stringify({
+						type: VIDEO_CALL_REJECTED,
+						payload: {
+							rejectedBy: {
+								id: senderUser.userId,
+								image: senderUser.getImage(),
+								name: senderUser.name,
+							},
+						},
+					}),
+					senderUser.userId
+				);
+				chatManager.deleteChat(chat.chatId);
+				//TODO: REMOVE IN MEDIA SOUP
+			}
+			break;
 		case CREATE_PRODUCER_TRANSPORT: {
 			// send rtp capabilities comes from client
 			const chat = chatManager.getChat(payload.chatId);
