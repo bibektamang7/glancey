@@ -1,12 +1,11 @@
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useSocket } from "./SocketProvider";
 import CallInterface from "@/pages/Call/CallInterface";
 import { User } from "@/types/user";
 import { Chat } from "@/types/chat";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
 	ACCEPT_VIDEO_CALL,
 	AUDIO_CALL_ACCEPTED,
@@ -25,13 +24,13 @@ import { useMapChat } from "./ChatProvider";
 import { PhoneCall, PhoneMissed, PhoneOff } from "lucide-react";
 import { useSession } from "next-auth/react";
 
-const defaultHandleStartCall = () => {
-	console.log("This is defualt handle start call");
-};
-
 const CallContext = createContext<
 	| {
-			handleStartCall: (callType: CALLTYPE, roomId: string, user: User) => void;
+			handleStartCall: (
+				callType: CALLTYPE,
+				roomId: string,
+				callTo?: User
+			) => void;
 	  }
 	| undefined
 >(undefined);
@@ -47,7 +46,8 @@ export const useCall = () => {
 export type CALLTYPE = "audio" | "video" | null;
 export interface Room {
 	id: string;
-	caller: User;
+	caller?: User;
+	callTo?: User;
 }
 
 const CallProvider = ({ children }: { children: React.ReactNode }) => {
@@ -56,11 +56,17 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 	const { socket } = useSocket();
 	const [callType, setCallType] = useState<CALLTYPE>(null);
 	const [room, setRoom] = useState<Room | null>(null);
+	const stableRoom = useMemo(() => room, [room?.id]);
+	const stableCallType = useMemo(() => callType, [callType]);
 
-	const handleStartCall = (callType: CALLTYPE, roomId: string, user: User) => {
+	const handleStartCall = (
+		callType: CALLTYPE,
+		roomId: string,
+		callTo?: User
+	) => {
 		setRoom({
 			id: roomId,
-			caller: user,
+			callTo,
 		});
 		setCallType(callType);
 	};
@@ -83,6 +89,13 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 				})
 			);
 		}
+	};
+	const handleAudioCallAccept = (caller: User, chatId: string) => {
+		setCallType("audio");
+		setRoom({
+			caller,
+			id: chatId,
+		});
 	};
 
 	const handleIncomingAudioCall = (chatId: string, requestedUser: User) => {
@@ -109,7 +122,7 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 						color="green"
 						size={16}
 						className="hover:cursor-pointer"
-						onClick={() => {}}
+						onClick={() => handleAudioCallAccept(requestedUser, chatId)}
 					/>
 					<PhoneOff
 						color="red"
@@ -140,34 +153,21 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 					</Avatar>
 					<div>
 						<span className="font-semibold">{requestedUser.name}</span>
-						{/* <div>
-							<p className="text-sm text-slate-600 font-semibold">Interests</p>
-							<div className="flex items-center gap-1">
-								{requestedUser.interests.length > 0 &&
-									requestedUser.interests.map((interest) => (
-										<p
-											key={`${chatId}-${interest}`}
-											className="border-2 !p-1 rounded-md font-semibold text-[0.6rem] text-slate-500 line-clamp-1 tracking-tight"
-										>
-											{interest}
-										</p>
-									))}
-							</div>
-						</div> */}
 					</div>
 				</div>
 			),
 			action: (
-				<div className="flex gap-2 items-center justify-center !mt-2">
+				<div className="flex gap-4 items-center justify-center !mt-2 !ml-4">
 					<PhoneCall
 						color="green"
 						size={16}
-						className="hover:cursor-pointer"
+						className="hover:cursor-pointer hover:bg-slate-300 hover:rounded-md"
+						onClick={() => handleAudioCallAccept(requestedUser, chatId)}
 					/>
 					<PhoneOff
 						color="red"
 						size={16}
-						className="hover:cursor-pointer"
+						className="hover:cursor-pointer hover:bg-slate-400 hover:rounded-md"
 						onClick={() => handleRejectCall("request", chatId)}
 					/>
 				</div>
@@ -302,10 +302,10 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 					chatId={openChat.chatId}
 				/>
 			)}
-			{callType !== null && (
+			{callType !== null && room && (
 				<CallInterface
-					callType={callType}
-					room={room!}
+					callType={stableCallType}
+					room={stableRoom!}
 				/>
 			)}
 			{children}
