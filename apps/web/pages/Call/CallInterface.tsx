@@ -15,7 +15,8 @@ import {
 	Video,
 	VideoOff,
 } from "lucide-react";
-import React, { useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
+import React, { useEffect, useRef, memo } from "react";
 
 const getRandomGradient = () => {
 	const gradients = [
@@ -35,17 +36,17 @@ const getRandomGradient = () => {
 	return gradients[Math.floor(Math.random() * gradients.length)];
 };
 
-const CallInterface = ({
-	callType,
-	room,
-}: {
+interface CallInterfaceProps {
 	callType: CALLTYPE;
 	room: Room;
-}) => {
+}
+
+const CallInterface = memo(({ callType, room }: CallInterfaceProps) => {
 	const isRendered = useRef(false);
+	const gradientRef = useRef(getRandomGradient()); // Store gradient to prevent re-calculation
+
 	const {
 		localVideoRef,
-		remoteVideoRef,
 		isAudioEnabled,
 		isVideoEnabled,
 		isScreenSharing,
@@ -54,7 +55,11 @@ const CallInterface = ({
 		toggleScreenShare: onToggleScreenShare,
 		joinRoom,
 		leaveRoom,
-	} = useMediasoupClient();
+		handleAudioCallAccepted,
+		handleVideoCallAccepted,
+		getRemoteVideoRef,
+		remoteStreams,
+	} = useMediasoupClient(room);
 
 	const showVideo = callType === "video";
 
@@ -64,22 +69,34 @@ const CallInterface = ({
 
 	const handleCallJoin = async () => {
 		try {
-			await joinRoom(room.id, callType, room.caller);
-		} catch (error) {}
+			if (!room.caller && room.callTo) {
+				await joinRoom(room.id, callType, room.callTo.id);
+				return;
+			}
+			if (callType === "audio") {
+				handleAudioCallAccepted(room.id);
+			} else {
+				handleVideoCallAccepted(room.id);
+			}
+		} catch (error) {
+			console.log("Something went wrong while joining the call", error);
+		}
 	};
 
 	useEffect(() => {
-		if (!isRendered.current) handleCallJoin();
-		isRendered.current = true;
-	}, []);
+		if (!isRendered.current) {
+			handleCallJoin();
+			isRendered.current = true;
+		}
+	}, []); // Empty dependency array - only run once
 
 	return (
-		<div className="fixed max-h-screen h-screen w-screen max-w-screen  flex flex-col items-center justify-center z-[50]">
+		<div className="fixed max-h-screen h-screen w-screen max-w-screen flex flex-col items-center justify-center z-[50]">
 			<div className="h-full w-full relative md:w-[60%] md:h-[80%]">
 				{showVideo ? (
 					<>
 						<video
-							ref={remoteVideoRef}
+							// ref={remoteVideoRef}
 							autoPlay
 							playsInline
 							className="w-full h-full object-cover"
@@ -113,24 +130,28 @@ const CallInterface = ({
 					<div
 						className={cn(
 							"flex items-start justify-center bg-gradient-to-br h-full rounded-md",
-							getRandomGradient()
+							gradientRef.current
 						)}
 					>
 						<div className="text-center text-white !mt-12">
 							<div className="w-12 h-12 md:w-16 md:h-16 bg-gray-600 rounded-full flex items-center justify-center !mx-auto !mb-2">
 								<Avatar>
 									<AvatarImage
-										src={room.caller.image}
+										src={room.caller ? room.caller.image : room.callTo?.image}
 										alt="User profile in call"
 									/>
-									<AvatarFallback>{room.caller.name.charAt(0)}</AvatarFallback>
+									<AvatarFallback>
+										{room.caller
+											? room.caller.name.charAt(0)
+											: room.callTo?.name.charAt(0)}
+									</AvatarFallback>
 								</Avatar>
 							</div>
 							<h2 className="text-lg font-semibold md:text-xl">
-								{room.caller.name}
+								{!room.caller && room.callTo?.name}
 							</h2>
 							<p className="text-gray-300 !mb-2 text-xs md:text-base">
-								calling
+								{!room.caller ? "calling" : "Join"}
 							</p>
 						</div>
 					</div>
@@ -206,6 +227,8 @@ const CallInterface = ({
 			</div>
 		</div>
 	);
-};
+});
+
+CallInterface.displayName = "CallInterface";
 
 export default CallInterface;
