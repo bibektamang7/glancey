@@ -1,5 +1,4 @@
 import { createWorker } from "./worker";
-import type { Consumer, Producer, Router, Transport } from "mediasoup/types";
 import { createClient } from "redis-config";
 import { Room } from "./room";
 import { createWebRtcTransport } from "./createWebrtcTransport";
@@ -14,19 +13,18 @@ const mediaSub = createClient();
 		.on("error", (err) => {
 			console.error("Failed to connect to mediasoup publish", err);
 		})
-		.connect();
+		.connect()
+		.then(() => {
+			console.log("Media publish is connected");
+		});
 	await mediaSub
 		.on("error", (err) => {
 			console.error("Failed to connect to mediasoup subscribe");
 		})
-		.connect();
-})();
-
-let router: Router;
-
-(async () => {
-	router = await createWorker();
-	console.log("Mediasoup worker and router initialized");
+		.connect()
+		.then(() => {
+			console.log("Media subscribe is connected");
+		});
 })();
 
 const rooms = new Map<string, Room>();
@@ -45,30 +43,46 @@ const getOrCreateRoom = async (roomId: string) => {
 	if (rooms.has(roomId)) {
 		return rooms.get(roomId);
 	}
-	const router = await createWorker();
-	const room = new Room(roomId, router);
-	rooms.set(roomId, room);
-	return room;
+	console.log("this is while creat ing room");
+	try {
+		const router = await createWorker();
+		console.log("after creating router here");
+		const room = new Room(roomId, router);
+		rooms.set(roomId, room);
+
+		return room;
+	} catch (error) {
+		console.log("k vao hosujfslkaf ");
+	}
 };
 
 mediaSub.subscribe("mediasoup:getRouterRtpCapabilities", async (message) => {
 	const parsedData = JSON.parse(message);
 	//TODO: track the chat here so that when subscribe in websocket we can extract the chat
 
-	const peer = new Peer(parsedData.userId);
-	const room = await getOrCreateRoom(parsedData.chatId);
-	if (!room) {
-		await mediasoupError("Failed to create room", parsedData.userId);
-		return;
+	try {
+		const peer = new Peer(parsedData.userId);
+		console.log("this is peer", peer.id);
+		const room = await getOrCreateRoom(parsedData.chatId);
+		console.log("is here room", room?.id);
+		if (!room) {
+			await mediasoupError("Failed to create room", parsedData.userId);
+			return;
+		}
+		room.addPeer(peer);
+
+		console.log("published the rtp");
+		await mediaPub.publish(
+			"mediasoup:rtpCapabilities",
+			JSON.stringify({
+				chatId: room.id,
+				userId: parsedData.userId,
+				routerCapabilities: room.router.rtpCapabilities,
+			})
+		);
+	} catch (error) {
+		console.log("Does something went wrong", error);
 	}
-	room.addPeer(peer);
-	await mediaPub.publish(
-		"mediasoup:rtpCapabilities",
-		JSON.stringify({
-			userId: parsedData.userId,
-			routerCapabilities: room.router.rtpCapabilities,
-		})
-	);
 });
 
 mediaSub.subscribe("mediasoup:createProducerTransport", async (message) => {
@@ -79,6 +93,7 @@ mediaSub.subscribe("mediasoup:createProducerTransport", async (message) => {
 			await mediasoupError("unable to find room!!!", parsedData.userId);
 			return;
 		}
+		const router = room.router;
 		const { transport, params } = await createWebRtcTransport(router);
 		const peer = room.getPeer(parsedData.userId);
 		// Add producer transport in peer
@@ -86,7 +101,7 @@ mediaSub.subscribe("mediasoup:createProducerTransport", async (message) => {
 
 		await mediaPub.publish(
 			"mediasoup:ProducerTransportCreated",
-			JSON.stringify({ params, userId: parsedData.userId })
+			JSON.stringify({ params, userId: parsedData.userId, chatId: room.id })
 		);
 	} catch (error) {
 		await mediasoupError(
@@ -121,6 +136,7 @@ mediaSub.subscribe("mediasoup:connectProducerTransport", async (message) => {
 		await mediaPub.publish(
 			"mediasoup:producerConnected",
 			JSON.stringify({
+				chatId: room.id,
 				userId: parsedData.userId,
 				message: "producer connected!",
 			})
@@ -179,12 +195,13 @@ mediaSub.subscribe("mediasoup:createConsumerTransport", async (message) => {
 			await mediasoupError("unable to find peer", userId);
 			return;
 		}
+		const router = room.router;
 		const { transport, params } = await createWebRtcTransport(router);
 		// Add consumer transport in peer
 		peer.addTransport(transport);
 		await mediaPub.publish(
 			"mediasoup:subTransportedCreated",
-			JSON.stringify({ params, userId: parsedData.userId })
+			JSON.stringify({ params, userId: parsedData.userId, chatId: room.id })
 		);
 	} catch (error) {
 		await mediasoupError("Failed to create consumer transport", userId);
@@ -216,6 +233,7 @@ mediaSub.subscribe("mediasoup:connectConsumerTransport", async (message) => {
 			JSON.stringify({
 				message: "consumer transport connected",
 				userId: parsedData.userId,
+				chatId: room.id,
 			})
 		);
 		// send(ws, 'subConnected', "consumer transport connected")
@@ -249,6 +267,7 @@ mediaSub.subscribe("mediasoup:consume", async (message) => {
 			return;
 		}
 
+		const router = room.router;
 		// When a new user is added, consumer is created to consume their stream
 		// i.e producer is user produced stream
 		// Create consumer
@@ -272,7 +291,7 @@ mediaSub.subscribe("mediasoup:consume", async (message) => {
 
 			await mediaPub.publish(
 				"mediasoup:subscribed",
-				JSON.stringify({ params, userId: parsedData.userId })
+				JSON.stringify({ params, userId: parsedData.userId, chatId: room.id })
 			);
 		}
 	} catch (error) {
@@ -303,6 +322,6 @@ mediaSub.subscribe("mediasoup:resume", async (message) => {
 	await consumer.resume();
 	await mediaPub.publish(
 		"mediasoup:resumed",
-		JSON.stringify({ message: "consumer resumed", userId: parsedData.userId })
+		JSON.stringify({ message: "consumer resumed", userId: userId })
 	);
 });

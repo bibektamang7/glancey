@@ -10,13 +10,13 @@ export const config = {
 	listenIp: "0.0.0.0",
 	listenPort: 3016,
 	mediasoup: {
-		numWorkers: Object.keys(os.cpus()).length,
+		// numWorkers: Object.keys(os.cpus()).length,
 		worker: {
 			logLevel: "debug" as WorkerLogLevel,
 			logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"] as WorkerLogTag[],
 		},
 		router: {
-			mediaCodes: [
+			mediaCodecs: [
 				{
 					kind: "audio",
 					mimeType: "audio/opus",
@@ -44,7 +44,7 @@ export const config = {
 	},
 };
 export const webRtcTransportOptions = {
-	listenIps: [{ ip: "0.0.0.0", announcedIp: null }],
+	listenIps: [{ ip: "0.0.0.0", announcedIp: "127.0.0.1" }],
 	enableUdp: true,
 	enableTcp: true,
 	preferUdp: true,
