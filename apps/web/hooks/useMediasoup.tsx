@@ -124,7 +124,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 		}
 	}, [socket, room.id, session.data?.user?.id, isConsumerTransportCreated]);
 
-	const handleConsume = (producerId: string) => {
+	const handleConsume = (producerId: string, consumerUserId: string) => {
 		if (!recvTransportRef.current) return;
 
 		socket?.send(
@@ -132,10 +132,11 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 				type: CONNECT_CONSUMER,
 				payload: {
 					chatId: room.id,
-					userId: session.data?.user?.id,
-					dtlsParameters: deviceRef.current?.rtpCapabilities,
+					sender: session.data?.user?.id,
+					rtpCapabilities: deviceRef.current?.rtpCapabilities,
 					producerId: producerId,
 					transportId: recvTransportRef.current.id,
+					consumerUserId,
 				},
 			})
 		);
@@ -143,10 +144,10 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 	const handleSocketMessage = useCallback(
 		async (event: MessageEvent) => {
-			const message = JSON.parse(event.data);
-			const payload = message.payload;
+			const eventMessage = JSON.parse(event.data);
+			const payload = eventMessage.payload;
 
-			switch (message.type) {
+			switch (eventMessage.type) {
 				case "rtpCapabilities":
 					if (deviceRef.current && !deviceRef.current.loaded) {
 						try {
@@ -180,13 +181,8 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 					}
 					break;
 
-				case "consumer_transport_created":
-					if (payload.chatId === room.id) {
-						await createRecvTransport(payload.params);
-					}
-					break;
 				case "subscribed": {
-					await createConsumer(payload.params);
+					await createConsumer(payload.params, payload.remoteUserId);
 					break;
 				}
 
@@ -211,23 +207,31 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 							await createConsumerTransport();
 
 							// Set up one-time listener for consumer_transport_connected
-							const onConsumerTransportConnected = (event: MessageEvent) => {
+							const onConsumerTransportConnected = async (
+								event: MessageEvent
+							) => {
 								const message = JSON.parse(event.data);
-								if (
-									message.type === "consumer_transport_connected" &&
-									message.payload.chatId === room.id
-								) {
-									handleConsume(payload.producerId); // Consume producer
+
+								if (message.payload.chatId !== room.id) return;
+								if (message.type === "consumer_transport_connected") {
 									socket.removeEventListener(
 										"message",
 										onConsumerTransportConnected
 									);
+								} else if (message.type === "consumer_transport_created") {
+									console.log("what is the params", message.payload.params);
+									const transport = await createRecvTransport(
+										message.payload.params
+									);
+									if (transport) {
+										handleConsume(payload.producerId, payload.senderUserId);
+									}
 								}
 							};
 
 							socket.addEventListener("message", onConsumerTransportConnected);
 						} else {
-							handleConsume(payload.producerId);
+							handleConsume(payload.producerId, payload.senderUserId);
 						}
 					}
 					break;
@@ -523,15 +527,29 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 		[socket, room.id]
 	);
 
+	interface ConsumerProps {
+		id: string;
+		producerId: string;
+		kind: string;
+		producerPaused: boolean;
+		type: string;
+		rtpCapabilities: any;
+		appData?: any;
+	}
+
 	const createConsumer = useCallback(
-		async (consumerData: {
-			id: string;
-			producerId: string;
-			kind: string;
-			rtpParameters: any;
-			userId: string;
-			appData?: any;
-		}) => {
+		async (
+			{
+				id,
+				kind,
+				producerId,
+				producerPaused,
+				rtpCapabilities,
+				type,
+				appData,
+			}: ConsumerProps,
+			userId: string
+		) => {
 			const recvTransport = recvTransportRef.current;
 
 			if (!recvTransport) {
@@ -542,45 +560,11 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 			try {
 				const consumer = await recvTransport.consume({
-					id: consumerData.id,
-					producerId: consumerData.producerId,
-					kind: consumerData.kind as "audio" | "video",
-					rtpParameters: consumerData.rtpParameters,
-					appData: consumerData.appData,
-				});
-
-				setRemoteStreams((prev) => {
-					const newStreams = new Map(prev);
-					let userStream = newStreams.get(consumerData.userId);
-
-					if (!userStream) {
-						userStream = {
-							userId: consumerData.userId,
-							stream: new MediaStream(),
-						};
-						newStreams.set(consumerData.userId, userStream);
-					}
-
-					userStream.stream.addTrack(consumer.track);
-
-					if (consumerData.kind === "audio") {
-						userStream.audioConsumer = consumer;
-					} else if (consumerData.kind === "video") {
-						if (consumerData.appData?.mediaType === "screen") {
-							userStream.screenConsumer = consumer;
-						} else {
-							userStream.videoConsumer = consumer;
-						}
-					}
-
-					if (consumerData.kind === "video") {
-						const videoRef = getRemoteVideoRef(consumerData.userId);
-						if (videoRef.current) {
-							videoRef.current.srcObject = userStream.stream;
-						}
-					}
-
-					return newStreams;
+					id: id,
+					producerId: producerId,
+					kind: kind as "audio" | "video",
+					rtpParameters: rtpCapabilities,
+					appData: appData,
 				});
 
 				socket?.send(
@@ -592,11 +576,51 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 						},
 					})
 				);
+
+				setRemoteStreams((prev) => {
+					const newStreams = new Map(prev);
+					let userStream = newStreams.get(userId);
+
+					if (!userStream) {
+						userStream = {
+							userId: userId,
+							stream: new MediaStream(),
+						};
+						newStreams.set(userId, userStream);
+					}
+
+					userStream.stream.addTrack(consumer.track);
+
+					if (kind === "audio") {
+						userStream.audioConsumer = consumer;
+					} else if (kind === "video") {
+						if (appData?.mediaType === "screen") {
+							userStream.screenConsumer = consumer;
+						} else {
+							userStream.videoConsumer = consumer;
+						}
+					}
+
+					if (kind === "video") {
+						const videoRef = getRemoteVideoRef(userId);
+						if (videoRef.current) {
+							videoRef.current.srcObject = userStream.stream;
+						}
+					}
+
+					return newStreams;
+				});
 			} catch (error) {
 				console.error("Failed to create consumer:", error);
 			}
 		},
-		[socket, room.id, getRemoteVideoRef, createConsumerTransport]
+		[
+			socket,
+			room.id,
+			getRemoteVideoRef,
+			createConsumerTransport,
+			recvTransportRef.current,
+		]
 	);
 
 	const startProducing = useCallback(async () => {
