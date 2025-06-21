@@ -5,17 +5,42 @@ export class Chat {
 	public admin: User;
 	private participants: Set<User>;
 	public currentParticipantsInCall: Set<User>;
+	private producers: Map<string, string[]>;
 	constructor(chatId: string, admin: User) {
 		this.chatId = chatId;
 		this.admin = admin;
 		this.participants = new Set();
 		this.currentParticipantsInCall = new Set();
+		this.producers = new Map();
 	}
+	addProducer({ userId, producerId }: { userId: string; producerId: string }) {
+		if (!this.producers.has(userId)) {
+			this.producers.set(userId, []);
+		}
+		this.producers.get(userId)!.push(producerId);
+	}
+
+	getProducers(): { userId: string; producerId: string }[] {
+		const result = [];
+		for (const [userId, producerIds] of this.producers) {
+			for (const producerId of producerIds) {
+				result.push({ userId, producerId });
+			}
+		}
+		return result;
+	}
+
 	addParticipantInCall(user: User) {
 		this.currentParticipantsInCall.add(user);
 	}
+	getParticipants() {
+		return this.participants;
+	}
 	removeParticipantFromCall(user: User) {
 		this.currentParticipantsInCall.delete(user);
+		if (this.currentParticipantsInCall.values.length < 2) {
+			this.currentParticipantsInCall = new Set();
+		}
 	}
 
 	addParticipant(user: User) {
@@ -30,6 +55,16 @@ export class Chat {
 			if (participantUserId !== senderUserId) {
 				participant.getSocket().send(payload);
 			}
+		});
+	}
+	broadcastInCall(payload: string, senderUserId?: string) {
+		this.currentParticipantsInCall.forEach((participant) => {
+			const participantUserId = participant.getUserId();
+			if (senderUserId && participantUserId === senderUserId) {
+				return;
+			}
+
+			participant.getSocket().send(payload);
 		});
 	}
 }
@@ -71,7 +106,12 @@ class ChatManager {
 		if (chatId) {
 			const chat = this.getChat(chatId);
 			chat?.removeParticipant(user);
+			const participants = chat?.getParticipants();
+			if (participants?.values.length === 0) {
+				this.deleteChat(chatId);
+			}
 		}
+		this.userChatMapping.delete(userId);
 	}
 }
 
