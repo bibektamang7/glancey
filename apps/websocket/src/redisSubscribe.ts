@@ -9,10 +9,14 @@ const socketSubClient = createClient();
 		.on("error", (err) => {
 			console.error("Failed to connect socket subscribe conneciton", err);
 		})
-		.connect();
+		.connect()
+		.then(() => {
+			console.log("Redis subscriber connected");
+		});
 })();
 
 socketSubClient.subscribe("mediasoup:rtpCapabilities", (message) => {
+	console.log("here it comes for capabilites");
 	const messageFromMediaSoup = JSON.parse(message);
 	const senderUser = userManager.getUser(messageFromMediaSoup.userId);
 	if (senderUser) {
@@ -37,7 +41,12 @@ socketSubClient.subscribe(
 			senderUser.getSocket().send(
 				JSON.stringify({
 					type: "producer_transport_created",
-					payload: { ...parsedData.params, chatId: parsedData.chatId },
+					payload: {
+						transport: {
+							...parsedData.params,
+						},
+						chatId: parsedData.chatId,
+					},
 				})
 			);
 		}
@@ -66,23 +75,49 @@ socketSubClient.subscribe("mediasoup:produced", async (message) => {
 	const chat = chatManager.getChat(parsedData.chatId);
 
 	if (socketUser && chat) {
-		chat.broadcastMessage(
+		chat.broadcastInCall(
 			JSON.stringify({
-				type: "produced_media",
+				type: "newProducer",
 				payload: {
-					//TODO: MIGHT NEED TO SEND USER WHOLE DATA
-					// CONSIDER IT AGAIN,
-					user: {
-						id: socketUser.userId,
-						image: socketUser.getImage(),
-						name: socketUser.name,
-					},
 					chatId: chat.chatId,
 					producerId: parsedData.producerId,
+					userId: socketUser.userId,
+					senderUserId: socketUser.userId,
 				},
 			}),
 			socketUser.userId
 		);
+		socketUser.getSocket().send(
+			JSON.stringify({
+				type: "produced_media",
+				payload: {
+					chatId: chat.chatId,
+					producerId: parsedData.producerId,
+					userId: socketUser.userId,
+				},
+			})
+		);
+		const existingProducers = chat
+			.getProducers()
+			.filter((p) => p.userId !== socketUser.userId);
+
+		for (const producer of existingProducers) {
+			socketUser.getSocket().send(
+				JSON.stringify({
+					type: "newProducer",
+					payload: {
+						chatId: chat.chatId,
+						producerId: producer.producerId,
+						userId: producer.userId,
+						senderUserId: producer.userId,
+					},
+				})
+			);
+		}
+		chat.addProducer({
+			userId: socketUser.userId,
+			producerId: parsedData.producerId,
+		});
 	}
 });
 
@@ -132,6 +167,7 @@ socketSubClient.subscribe("mediasoup:subscribed", async (message) => {
 			JSON.stringify({
 				type: "subscribed",
 				payload: {
+					remoteUserId: parsedData.remoteUserId,
 					params: parsedData.params,
 					chatId: parsedData.chatId,
 				},
