@@ -4,7 +4,8 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
-		"dev": "node ./dist/index.js"
+		"dev": "node ./dist/index.js",
+		"build": "bun build src/index.ts --outdir dist --target node"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"

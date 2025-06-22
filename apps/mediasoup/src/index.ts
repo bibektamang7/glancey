@@ -43,10 +43,8 @@ const getOrCreateRoom = async (roomId: string) => {
 	if (rooms.has(roomId)) {
 		return rooms.get(roomId);
 	}
-	console.log("this is while creat ing room");
 	try {
 		const router = await createWorker();
-		console.log("after creating router here");
 		const room = new Room(roomId, router);
 		rooms.set(roomId, room);
 
@@ -96,8 +94,10 @@ mediaSub.subscribe("mediasoup:createProducerTransport", async (message) => {
 		const router = room.router;
 		const { transport, params } = await createWebRtcTransport(router);
 		const peer = room.getPeer(parsedData.userId);
+		if (!peer) return;
 		// Add producer transport in peer
-		peer?.addTransport(transport);
+		peer.addTransport(transport);
+		console.log(peer.id, "this is peer transport");
 
 		await mediaPub.publish(
 			"mediasoup:ProducerTransportCreated",
@@ -122,7 +122,9 @@ mediaSub.subscribe("mediasoup:connectProducerTransport", async (message) => {
 			return;
 		}
 		const peer = room.getPeer(parsedData.userId);
-		const producerTransport = peer?.getTransport(parsedData.transportId);
+		if (!peer) return;
+
+		const producerTransport = peer.getTransport(parsedData.transportId);
 		if (!producerTransport) {
 			console.log("unable to find transport in connect producer transport");
 			await mediasoupError("unable to transport!!!", parsedData.userId);
@@ -130,7 +132,7 @@ mediaSub.subscribe("mediasoup:connectProducerTransport", async (message) => {
 		}
 
 		await producerTransport.connect({
-			dtlParameters: parsedData.dtlsParameters,
+			dtlsParameters: parsedData.dtlsParameters,
 		});
 
 		await mediaPub.publish(
@@ -244,24 +246,31 @@ mediaSub.subscribe("mediasoup:connectConsumerTransport", async (message) => {
 });
 mediaSub.subscribe("mediasoup:consume", async (message) => {
 	const parsedData = JSON.parse(message);
-	const { chatId, userId, transportId, producerId } = parsedData;
+	const { chatId, userId, transportId, producerId, producerUserId } =
+		parsedData;
 	try {
 		const room = rooms.get(chatId);
 		if (!room) {
 			await mediasoupError("unable to find room", userId);
 			return;
 		}
-		const peer = room.getPeer(userId);
-		if (!peer) {
-			await mediasoupError("unable to find peer", userId);
+		const producerPeer = room.getPeer(producerUserId);
+		const consumerPeer = room.getPeer(userId);
+		if (!producerPeer) {
+			await mediasoupError("unable to find producer peer", producerUserId);
 			return;
 		}
-		const producer = peer.getProducer(producerId);
+		if (!consumerPeer) {
+			await mediasoupError("unable to find consumer peer", userId);
+			return;
+		}
+		const producer = producerPeer.getProducer(producerId);
+
 		if (!producer) {
 			await mediasoupError("unable to find producer", userId);
 			return;
 		}
-		const consumerTransport = peer.getTransport(transportId);
+		const consumerTransport = consumerPeer.getTransport(transportId);
 		if (!consumerTransport) {
 			await mediasoupError("unable to find transport", userId);
 			return;
@@ -278,8 +287,9 @@ mediaSub.subscribe("mediasoup:consume", async (message) => {
 			consumerTransport
 		);
 		if (consumerRes) {
-			peer.addConsumer(consumerRes);
+			consumerPeer.addConsumer(consumerRes);
 			// consumer = consumerRes;
+			consumerRes.appData;
 			const params = {
 				producerId: producer.id,
 				id: consumerRes.id,
@@ -287,11 +297,12 @@ mediaSub.subscribe("mediasoup:consume", async (message) => {
 				rtpCapabilities: consumerRes.rtpParameters,
 				type: consumerRes.type,
 				producerPaused: consumerRes.producerPaused,
+				appData: consumerRes.appData,
 			};
 
 			await mediaPub.publish(
 				"mediasoup:subscribed",
-				JSON.stringify({ params, userId: parsedData.userId, chatId: room.id })
+				JSON.stringify({ params, userId: parsedData.userId, chatId: room.id , remoteUserId: producerUserId})
 			);
 		}
 	} catch (error) {
