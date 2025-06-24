@@ -8,6 +8,7 @@ import { useSocket } from "@/contexts/SocketProvider";
 import { CALLTYPE, Room } from "@/contexts/CallProvider";
 import {
 	ACCEPT_AUDIO_CALL,
+	ACCEPT_VIDEO_CALL,
 	CONNECT_CONSUMER,
 	CONNECT_PRODUCER,
 	CONNECT_PRODUCER_TRANSPORT,
@@ -49,7 +50,8 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 	const { socket } = useSocket();
 	const sendTransportRef = useRef<Transport | null>(null);
 	const recvTransportRef = useRef<Transport | null>(null);
-	const [isConsumerTransportCreated, setIsConsumerTransportCreated] = useState(false);
+	const [isConsumerTransportCreated, setIsConsumerTransportCreated] =
+		useState(false);
 
 	const [audioProducer, setAudioProducer] = useState<Producer | null>(null);
 	const [videoProducer, setVideoProducer] = useState<Producer | null>(null);
@@ -59,8 +61,12 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 	const [isScreenSharing, setIsScreenSharing] = useState(false);
 	const [currentCallType, setCurrentCallType] = useState<CALLTYPE>("audio");
 
-	const [remoteStreams, setRemoteStreams] = useState<Map<string, RemoteStream>>(new Map());
-	const remoteVideoRefs = useRef<Map<string, React.RefObject<HTMLVideoElement | null>>>(new Map());
+	const [remoteStreams, setRemoteStreams] = useState<Map<string, RemoteStream>>(
+		new Map()
+	);
+	const remoteVideoRefs = useRef<
+		Map<string, React.RefObject<HTMLVideoElement | null>>
+	>(new Map());
 
 	const localVideoRef = useRef<HTMLVideoElement>(null);
 	const localStreamRef = useRef<MediaStream | null>(null);
@@ -204,15 +210,25 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 						if (!recvTransportRef.current && socket) {
 							await createConsumerTransport();
 
-							const onConsumerTransportConnected = async (event: MessageEvent) => {
+							const onConsumerTransportConnected = async (
+								event: MessageEvent
+							) => {
 								const message = JSON.parse(event.data);
 
 								if (message.payload.chatId !== room.id) return;
 								if (message.type === "consumer_transport_connected") {
-									socket.removeEventListener("message", onConsumerTransportConnected);
+									socket.removeEventListener(
+										"message",
+										onConsumerTransportConnected
+									);
 								} else if (message.type === "consumer_transport_created") {
-									console.log("Consumer transport params:", message.payload.params);
-									const transport = await createRecvTransport(message.payload.params);
+									console.log(
+										"Consumer transport params:",
+										message.payload.params
+									);
+									const transport = await createRecvTransport(
+										message.payload.params
+									);
 									if (transport) {
 										handleConsume(payload.producerId, payload.senderUserId);
 									}
@@ -281,7 +297,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 			if (socket) {
 				socket.send(
 					JSON.stringify({
-						type: "ACCEPT_VIDEO_CALL",
+						type: ACCEPT_VIDEO_CALL,
 						payload: {
 							sender: session.data?.user?.id,
 							chatId,
@@ -295,7 +311,12 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 	const handleProducerClosed = useCallback(
 		(data: { producerId: string; userId: string; kind?: string }) => {
-			console.log("Producer closed:", data.producerId, "from user:", data.userId);
+			console.log(
+				"Producer closed:",
+				data.producerId,
+				"from user:",
+				data.userId
+			);
 
 			setRemoteStreams((prev) => {
 				const newStreams = new Map(prev);
@@ -338,7 +359,12 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 	const handleConsumerClosed = useCallback(
 		(data: { consumerId: string; userId: string }) => {
-			console.log("Consumer closed:", data.consumerId, "for user:", data.userId);
+			console.log(
+				"Consumer closed:",
+				data.consumerId,
+				"for user:",
+				data.userId
+			);
 
 			setRemoteStreams((prev) => {
 				const newStreams = new Map(prev);
@@ -388,7 +414,8 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 				return null;
 			}
 			try {
-				const transport = deviceRef.current.createSendTransport(transportOptions);
+				const transport =
+					deviceRef.current.createSendTransport(transportOptions);
 
 				transport.on(
 					"connect",
@@ -475,7 +502,8 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 			}
 
 			try {
-				const transport = deviceRef.current.createRecvTransport(transportOptions);
+				const transport =
+					deviceRef.current.createRecvTransport(transportOptions);
 
 				transport.on(
 					"connect",
@@ -520,7 +548,6 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 		rtpCapabilities: any;
 		appData?: any;
 	}
-
 	const createConsumer = useCallback(
 		async (
 			{
@@ -573,8 +600,10 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 						newStreams.set(userId, userStream);
 					}
 
+					// Add the track to the stream
 					userStream.stream.addTrack(consumer.track);
 
+					// Assign consumer based on kind and appData
 					if (kind === "audio") {
 						userStream.audioConsumer = consumer;
 					} else if (kind === "video") {
@@ -585,15 +614,25 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 						}
 					}
 
-					if (kind === "video") {
-						const videoRef = getRemoteVideoRef(userId);
-						if (videoRef.current) {
-							videoRef.current.srcObject = userStream.stream;
-						}
-					}
-
 					return newStreams;
 				});
+
+				// Set video element source AFTER state update
+				if (kind === "video") {
+					setTimeout(() => {
+						const videoRef = getRemoteVideoRef(userId);
+						if (videoRef.current) {
+							const userStream = remoteStreams.get(userId);
+							if (userStream) {
+								console.log("Setting remote video source for user:", userId);
+								videoRef.current.srcObject = userStream.stream;
+
+								// Ensure video plays
+								videoRef.current.play().catch(console.error);
+							}
+						}
+					}, 100);
+				}
 			} catch (error) {
 				console.error("Failed to create consumer:", error);
 			}
@@ -603,7 +642,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 	const startProducing = useCallback(async () => {
 		console.log("Starting to produce media...");
-		
+
 		if (!sendTransportRef.current || !localStreamRef.current) {
 			console.error("Transport or stream not available for producing");
 			return;
@@ -613,7 +652,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 			// Always produce audio
 			const audioTracks = localStreamRef.current.getAudioTracks();
 			console.log("Audio tracks available:", audioTracks.length);
-			
+
 			if (audioTracks.length > 0) {
 				const audioProducer = await sendTransportRef.current.produce({
 					track: audioTracks[0],
@@ -627,7 +666,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 			if (currentCallType === "video") {
 				const videoTracks = localStreamRef.current.getVideoTracks();
 				console.log("Video tracks available:", videoTracks.length);
-				
+
 				if (videoTracks.length > 0) {
 					const videoProducer = await sendTransportRef.current.produce({
 						track: videoTracks[0],
@@ -651,13 +690,13 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 					constraints = { audio: true, video: false };
 					break;
 				case "video":
-					constraints = { 
-						audio: true, 
-						video: { 
+					constraints = {
+						audio: true,
+						video: {
 							width: { ideal: 1280 },
 							height: { ideal: 720 },
-							frameRate: { ideal: 30 }
-						} 
+							frameRate: { ideal: 30 },
+						},
 					};
 					break;
 			}
@@ -665,10 +704,10 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 			console.log("Requesting media with constraints:", constraints);
 			const stream = await navigator.mediaDevices.getUserMedia(constraints);
 			localStreamRef.current = stream;
-			
+
 			console.log("Media stream obtained:", {
 				audioTracks: stream.getAudioTracks().length,
-				videoTracks: stream.getVideoTracks().length
+				videoTracks: stream.getVideoTracks().length,
 			});
 
 			// Set local video element
@@ -702,7 +741,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 						screenProducer.close();
 						setScreenProducer(null);
 					}
-					screenStreamRef.current?.getTracks().forEach(track => track.stop());
+					screenStreamRef.current?.getTracks().forEach((track) => track.stop());
 					screenStreamRef.current = null;
 				});
 			}
@@ -723,7 +762,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 			console.log("Joining room:", roomId, "Call type:", callType);
 			setCurrentCallType(callType);
-			
+
 			try {
 				const stream = await getUserMedia(callType);
 				console.log("Successfully obtained media stream");
@@ -819,7 +858,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 	const toggleAudio = useCallback(() => {
 		console.log("Toggling audio, current state:", isAudioEnabled);
-		
+
 		if (audioProducer) {
 			if (isAudioEnabled) {
 				audioProducer.pause();
@@ -843,7 +882,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 	const toggleVideo = useCallback(() => {
 		console.log("Toggling video, current state:", isVideoEnabled);
-		
+
 		if (videoProducer) {
 			if (isVideoEnabled) {
 				videoProducer.pause();
@@ -867,7 +906,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 
 	const toggleScreenShare = useCallback(async () => {
 		console.log("Toggling screen share, current state:", isScreenSharing);
-		
+
 		try {
 			if (isScreenSharing) {
 				// Stop screen sharing
@@ -886,7 +925,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 			} else {
 				// Start screen sharing
 				const screenStream = await getScreenShare();
-				
+
 				if (sendTransportRef.current && screenStream) {
 					const videoTrack = screenStream.getVideoTracks()[0];
 					if (videoTrack) {
@@ -897,7 +936,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 						setScreenProducer(producer);
 						console.log("Screen producer created:", producer.id);
 					}
-					
+
 					// Also handle audio from screen share if available
 					const audioTrack = screenStream.getAudioTracks()[0];
 					if (audioTrack) {
