@@ -43,9 +43,13 @@ interface MediasoupClientHook {
 	getRemoteVideoRef: (
 		userId: string
 	) => React.RefObject<HTMLVideoElement | null>;
+	localStreamRef: React.RefObject<MediaStream | null>;
 }
 
-export function useMediasoupClient(room: Room): MediasoupClientHook {
+export function useMediasoupClient(
+	room: Room,
+	callType: CALLTYPE
+): MediasoupClientHook {
 	const session = useSession();
 	const { socket } = useSocket();
 	const sendTransportRef = useRef<Transport | null>(null);
@@ -59,7 +63,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true);
 	const [isVideoEnabled, setIsVideoEnabled] = useState(true);
 	const [isScreenSharing, setIsScreenSharing] = useState(false);
-	const [currentCallType, setCurrentCallType] = useState<CALLTYPE>("audio");
+	const [currentCallType, setCurrentCallType] = useState<CALLTYPE>(callType);
 
 	const [remoteStreams, setRemoteStreams] = useState<Map<string, RemoteStream>>(
 		new Map()
@@ -97,15 +101,18 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 		initializeDevice();
 	}, []);
 
-	const getRemoteVideoRef = useCallback((userId: string) => {
-		if (!remoteVideoRefs.current.has(userId)) {
-			remoteVideoRefs.current.set(
-				userId,
-				React.createRef<HTMLVideoElement | null>()
-			);
-		}
-		return remoteVideoRefs.current.get(userId)!;
-	}, []);
+	const getRemoteVideoRef = useCallback(
+		(userId: string) => {
+			if (!remoteVideoRefs.current.has(userId)) {
+				remoteVideoRefs.current.set(
+					userId,
+					React.createRef<HTMLVideoElement | null>()
+				);
+			}
+			return remoteVideoRefs.current.get(userId)!;
+		},
+		[remoteStreams, remoteVideoRefs]
+	);
 
 	const createConsumerTransport = useCallback(async () => {
 		if (isConsumerTransportCreated || recvTransportRef.current) {
@@ -618,21 +625,22 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 				});
 
 				// Set video element source AFTER state update
-				if (kind === "video") {
-					setTimeout(() => {
-						const videoRef = getRemoteVideoRef(userId);
-						if (videoRef.current) {
-							const userStream = remoteStreams.get(userId);
-							if (userStream) {
-								console.log("Setting remote video source for user:", userId);
-								videoRef.current.srcObject = userStream.stream;
+				// if (kind === "video") {
+				// 	const videoRef = getRemoteVideoRef(userId);
+				// 	console.log("what is here that makes not working", videoRef);
+				// 	console.log(remoteVideoRefs);
+				// 	if (videoRef.current) {
+				// 		alert("yeta ko k xa ra hau");
+				// 		const userStream = remoteStreams.get(userId);
+				// 		if (userStream) {
+				// 			console.log(userStream.stream, "this is user stram");
+				// 			videoRef.current.srcObject = userStream.stream;
 
-								// Ensure video plays
-								videoRef.current.play().catch(console.error);
-							}
-						}
-					}, 100);
-				}
+				// 			// Ensure video plays
+				// 			videoRef.current.play().catch(console.error);
+				// 		}
+				// 	}
+				// }
 			} catch (error) {
 				console.error("Failed to create consumer:", error);
 			}
@@ -956,6 +964,7 @@ export function useMediasoupClient(room: Room): MediasoupClientHook {
 	}, [isScreenSharing, screenProducer, getScreenShare]);
 
 	return {
+		localStreamRef,
 		localVideoRef,
 		remoteStreams,
 		isAudioEnabled,

@@ -38,268 +38,378 @@ const getRandomGradient = () => {
 interface CallInterfaceProps {
 	callType: CALLTYPE;
 	room: Room;
+	closeCallInterfaceOnLeave: () => void;
 }
 
-const CallInterface = memo(({ callType, room }: CallInterfaceProps) => {
-	const isRendered = useRef(false);
-	const gradientRef = useRef(getRandomGradient());
+const CallInterface = memo(
+	({ callType, room, closeCallInterfaceOnLeave }: CallInterfaceProps) => {
+		const isRendered = useRef(false);
+		const gradientRef = useRef(getRandomGradient());
 
-	const {
-		localVideoRef,
-		remoteStreams,
-		isAudioEnabled,
-		isVideoEnabled,
-		isScreenSharing,
-		toggleAudio: onToggleAudio,
-		toggleVideo: onToggleVideo,
-		toggleScreenShare: onToggleScreenShare,
-		joinRoom,
-		leaveRoom,
-		handleAudioCallAccepted,
-		handleVideoCallAccepted,
-		getRemoteVideoRef,
-	} = useMediasoupClient(room);
+		const {
+			localStreamRef,
+			localVideoRef,
+			remoteStreams,
+			isAudioEnabled,
+			isVideoEnabled,
+			isScreenSharing,
+			toggleAudio: onToggleAudio,
+			toggleVideo: onToggleVideo,
+			toggleScreenShare: onToggleScreenShare,
+			joinRoom,
+			leaveRoom,
+			handleAudioCallAccepted,
+			handleVideoCallAccepted,
+			getRemoteVideoRef,
+		} = useMediasoupClient(room, callType);
 
-	const showVideo = callType === "video";
-	const hasRemoteParticipants = remoteStreams.size > 0;
+		const showVideo = callType === "video";
+		const hasRemoteParticipants = remoteStreams.size > 0;
 
-	// Get the first remote participant for main video display
-	const remoteParticipantId = hasRemoteParticipants
-		? Array.from(remoteStreams.keys())[0]
-		: null;
-	const remoteVideoRef = remoteParticipantId
-		? getRemoteVideoRef(remoteParticipantId)
-		: null;
+		// Get the first remote participant for main video display
+		const remoteParticipantId = hasRemoteParticipants
+			? Array.from(remoteStreams.keys())[0]
+			: null;
+		const remoteVideoRef = remoteParticipantId
+			? getRemoteVideoRef(remoteParticipantId)
+			: null;
 
-	const onLeaveCall = async () => {
-		await leaveRoom();
-	};
+		const onLeaveCall = async () => {
+			await leaveRoom();
+			closeCallInterfaceOnLeave();
+		};
 
-	const handleCallJoin = async () => {
-		try {
-			if (!room.caller && room.callTo) {
-				await joinRoom(room.id, callType, room.callTo.id);
-				return;
+		const handleCallJoin = async () => {
+			try {
+				if (!room.caller && room.callTo) {
+					await joinRoom(room.id, callType, room.callTo.id);
+					return;
+				}
+				if (callType === "audio") {
+					handleAudioCallAccepted(room.id);
+				} else {
+					handleVideoCallAccepted(room.id);
+				}
+			} catch (error) {
+				console.log("Something went wrong while joining the call", error);
 			}
-			if (callType === "audio") {
-				handleAudioCallAccepted(room.id);
-			} else {
-				handleVideoCallAccepted(room.id);
+		};
+
+		useEffect(() => {
+			if (!isRendered.current) {
+				handleCallJoin();
+				isRendered.current = true;
 			}
-		} catch (error) {
-			console.log("Something went wrong while joining the call", error);
-		}
-	};
+		}, []);
 
-	useEffect(() => {
-		if (!isRendered.current) {
-			handleCallJoin();
-			isRendered.current = true;
-		}
-	}, []);
+		useEffect(() => {
+			console.log(
+				remoteVideoRef?.current,
+				"this is remoteVideoRef in video",
+				remoteParticipantId
+			);
+			if (remoteVideoRef?.current && remoteParticipantId) {
+				const remoteStream = remoteStreams.get(remoteParticipantId);
+				console.log("i don't know about here so see", remoteStream);
+				if (remoteStream?.stream) {
+					console.log("Setting remote stream:", remoteStream.stream);
 
-	useEffect(() => {
-		if (remoteVideoRef?.current && remoteParticipantId) {
-			const remoteStream = remoteStreams.get(remoteParticipantId);
-			if (remoteStream) {
-				remoteVideoRef.current.srcObject = remoteStream.stream;
+					const videoEl = remoteVideoRef.current;
+
+					videoEl.onloadedmetadata = null;
+
+					videoEl.srcObject = remoteStream.stream;
+					console.log("this is videoElemnt", videoEl);
+
+					videoEl.onloadedmetadata = () => {
+						alert("yeat aaou no ha");
+						videoEl
+							.play()
+							.then(() => {
+								console.log("Remote video playing");
+							})
+							.catch((error) => {
+								console.error("Failed to play remote video:", error);
+							});
+					};
+				}
 			}
-		}
-	}, [remoteVideoRef, remoteParticipantId, remoteStreams]);
 
-	const renderVideoCall = () => {
-		if (!hasRemoteParticipants) {
+			return () => {
+				if (remoteVideoRef?.current) {
+					remoteVideoRef.current.onloadedmetadata = null;
+				}
+			};
+		}, [remoteVideoRef, remoteParticipantId, remoteStreams]);
+
+		// 3. Fix in CallInterface.tsx - renderVideoCall function
+		const renderVideoCall = () => {
+			console.log("this is local stram", localVideoRef.current?.srcObject);
+
+			console.log("this is remite stram", remoteStreams);
+			const hasValidRemoteStream =
+				!!remoteParticipantId &&
+				!!remoteStreams.get(remoteParticipantId)?.stream?.getVideoTracks()
+					.length;
+
+			if (!hasValidRemoteStream) {
+				return (
+					<div className="relative w-full h-full bg-gray-800">
+						{isVideoEnabled && localVideoRef.current && (
+							<video
+								ref={localVideoRef}
+								src={String(localVideoRef.current.src)}
+								autoPlay
+								playsInline
+								muted
+								className="w-full h-full object-cover"
+								style={{ transform: "scaleX(-1)" }}
+							/>
+						)}
+						{!isVideoEnabled && (
+							<div className="w-full h-full flex items-center justify-center bg-gray-800">
+								<div className="text-white text-center">
+									<VideoOff className="w-16 h-16 mx-auto mb-4" />
+									<p>Camera is off</p>
+								</div>
+							</div>
+						)}
+					</div>
+				);
+			}
+
 			return (
-				<div className="relative w-full h-full bg-gray-800">
-					{isVideoEnabled && (
-						<video
-							ref={localVideoRef}
-							autoPlay
-							playsInline
-							muted
-							className="w-full h-full object-cover"
-							style={{ transform: "scaleX(-1)" }}
-						/>
+				<>
+					{Array.from(remoteStreams.values()).map((remoteStream) => {
+						const videoRef = getRemoteVideoRef(remoteStream.userId);
+						<div className="relative w-full h-full bg-gray-800">
+							<video
+								ref={videoRef}
+								autoPlay
+								playsInline
+								className="w-full h-full object-cover"
+								style={{
+									transform: isScreenSharing ? "none" : "scaleX(-1)",
+								}}
+								onLoadedMetadata={() => {
+									console.log("Remote video loaded");
+								}}
+								onError={(e) => {
+									console.error("Remote video error:", e);
+								}}
+							/>
+
+							{/* Local video in corner */}
+							{isVideoEnabled && (
+								<Card className="absolute top-4 right-4 w-48 h-36 overflow-hidden border-2 border-white">
+									<video
+										ref={localVideoRef}
+										autoPlay
+										playsInline
+										muted
+										className="w-full h-full object-cover"
+										style={{ transform: "scaleX(-1)" }}
+									/>
+								</Card>
+							)}
+
+							{/* Screen Share Indicator */}
+							{isScreenSharing && (
+								<div className="absolute top-4 left-4 bg-red-500 text-white !px-3 !py-1 rounded-full text-sm font-medium">
+									<Monitor className="w-4 h-4 inline !mr-1" />
+									Sharing Screen
+								</div>
+							)}
+						</div>;
+					})}
+					{/* Remote video */}
+				</>
+			);
+		};
+
+		// 4. Additional fix - Ensure local video stays connected
+		useEffect(() => {
+			if (localVideoRef.current && localStreamRef.current && isVideoEnabled) {
+				// Re-attach local stream if it gets disconnected
+				if (localVideoRef.current.srcObject !== localStreamRef.current) {
+					console.log("Re-attaching local video stream");
+					localVideoRef.current.srcObject = localStreamRef.current;
+				}
+			}
+		}, [isVideoEnabled, localStreamRef.current]);
+
+		// // 5. Debug helper - Add this to monitor stream states
+		useEffect(() => {
+			console.log("Stream states:", {
+				localStream: localStreamRef.current?.id,
+				localVideoTracks: localStreamRef.current?.getVideoTracks().length,
+				remoteStreams: Array.from(remoteStreams.entries()).map(
+					([userId, stream]) => ({
+						userId,
+						streamId: stream.stream.id,
+						videoTracks: stream.stream.getVideoTracks().length,
+						audioTracks: stream.stream.getAudioTracks().length,
+					})
+				),
+				hasRemoteParticipants,
+				remoteParticipantId,
+			});
+		}, [remoteStreams, hasRemoteParticipants, remoteParticipantId]);
+		useEffect(() => {
+			Array.from(remoteStreams.entries()).forEach(([userId, userStream]) => {
+				const videoRef = getRemoteVideoRef(userId);
+				if (videoRef.current && userStream?.stream) {
+					videoRef.current.srcObject = userStream.stream;
+
+					videoRef.current.onloadedmetadata = () => {
+						videoRef.current
+							?.play()
+							.catch((err) => console.error("Remote video play error:", err));
+					};
+				}
+			});
+		}, [remoteStreams]);
+
+		const renderAudioCall = () => {
+			return (
+				<div
+					className={cn(
+						"flex items-start justify-center bg-gradient-to-br h-full rounded-md",
+						gradientRef.current
 					)}
+				>
+					<div className="text-center text-white !mt-12">
+						<div className="w-12 h-12 md:w-16 md:h-16 bg-gray-600 rounded-full flex items-center justify-center !mx-auto !mb-2">
+							<Avatar className="w-full h-full">
+								<AvatarImage
+									src={room.caller ? room.caller.image : room.callTo?.image}
+									alt="User profile in call"
+								/>
+								<AvatarFallback>
+									{room.caller
+										? room.caller.name.charAt(0).toUpperCase()
+										: room.callTo?.name.charAt(0).toUpperCase()}
+								</AvatarFallback>
+							</Avatar>
+						</div>
+						<h2 className="text-lg font-semibold md:text-xl">
+							{!room.caller && room.callTo
+								? room.callTo.name
+								: room.caller?.name || "Unknown"}
+						</h2>
+						<p className="text-gray-300 !mb-2 text-xs md:text-base">
+							{hasRemoteParticipants ? "Connected" : "Connecting..."}
+						</p>
+
+						{/* Audio level indicators could go here */}
+						{hasRemoteParticipants && (
+							<div className="flex justify-center !space-x-1 !mt-4">
+								{[1, 2, 3, 4, 5].map((bar) => (
+									<div
+										key={bar}
+										className="w-1 bg-white rounded-full animate-pulse"
+										style={{
+											height: `${Math.random() * 20 + 10}px`,
+											animationDelay: `${bar * 0.1}s`,
+										}}
+									/>
+								))}
+							</div>
+						)}
+					</div>
 				</div>
 			);
-		}
+		};
 
-		// Show remote participant's video with local video in corner
 		return (
-			<>
-				<video
-					ref={remoteVideoRef}
-					autoPlay
-					playsInline
-					className="w-full h-full object-cover"
-					style={{
-						transform: isScreenSharing ? "none" : "scaleX(-1)",
-					}}
-				/>
+			<div className="fixed max-h-screen h-screen w-screen max-w-screen flex flex-col items-center justify-center z-[50] bg-black">
+				<div className="h-full w-full relative md:w-[60%] md:h-[80%]">
+					{showVideo ? renderVideoCall() : renderAudioCall()}
 
-				{/* Local video in corner */}
-				<Card className="absolute top-4 right-4 w-48 h-36 overflow-hidden border-2 border-white">
-					<video
-						ref={localVideoRef}
-						autoPlay
-						playsInline
-						muted
-						className="w-full h-full object-cover"
-						style={{ transform: "scaleX(-1)" }}
-					/>
-				</Card>
+					{/* Controls */}
+					<div className="!p-6 absolute bottom-0 !mx-auto bg-inherit w-full">
+						<div className="flex items-center justify-center !space-x-4">
+							<Button
+								variant={isAudioEnabled ? "default" : "destructive"}
+								className="rounded-full w-12 h-12 hover:cursor-pointer"
+								onClick={onToggleAudio}
+								title={isAudioEnabled ? "Mute microphone" : "Unmute microphone"}
+							>
+								{isAudioEnabled ? (
+									<Mic className="w-6 h-6" />
+								) : (
+									<MicOff className="w-6 h-6" />
+								)}
+							</Button>
 
-				{/* Screen Share Indicator */}
-				{isScreenSharing && (
-					<div className="absolute top-4 left-4 bg-red-500 text-white !px-3 !py-1 rounded-full text-sm font-medium">
-						<Monitor className="w-4 h-4 inline !mr-1" />
-						Sharing Screen
-					</div>
-				)}
-			</>
-		);
-	};
+							<Button
+								variant={isVideoEnabled ? "default" : "destructive"}
+								className="rounded-full w-12 h-12 hover:cursor-pointer"
+								onClick={onToggleVideo}
+								title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
+							>
+								{isVideoEnabled ? (
+									<Video className="w-6 h-6" />
+								) : (
+									<VideoOff className="w-6 h-6" />
+								)}
+							</Button>
 
-	const renderAudioCall = () => {
-		return (
-			<div
-				className={cn(
-					"flex items-start justify-center bg-gradient-to-br h-full rounded-md",
-					gradientRef.current
-				)}
-			>
-				<div className="text-center text-white !mt-12">
-					<div className="w-12 h-12 md:w-16 md:h-16 bg-gray-600 rounded-full flex items-center justify-center !mx-auto !mb-2">
-						<Avatar className="w-full h-full">
-							<AvatarImage
-								src={room.caller ? room.caller.image : room.callTo?.image}
-								alt="User profile in call"
-							/>
-							<AvatarFallback>
-								{room.caller
-									? room.caller.name.charAt(0).toUpperCase()
-									: room.callTo?.name.charAt(0).toUpperCase()}
-							</AvatarFallback>
-						</Avatar>
-					</div>
-					<h2 className="text-lg font-semibold md:text-xl">
-						{!room.caller && room.callTo
-							? room.callTo.name
-							: room.caller?.name || "Unknown"}
-					</h2>
-					<p className="text-gray-300 !mb-2 text-xs md:text-base">
-						{hasRemoteParticipants ? "Connected" : "Connecting..."}
-					</p>
+							<Button
+								variant={isScreenSharing ? "default" : "outline"}
+								className="rounded-full w-12 h-12 hover:cursor-pointer"
+								onClick={onToggleScreenShare}
+								title={isScreenSharing ? "Stop screen share" : "Share screen"}
+							>
+								{isScreenSharing ? (
+									<MonitorOff className="w-6 h-6" />
+								) : (
+									<Monitor className="w-6 h-6" />
+								)}
+							</Button>
 
-					{/* Audio level indicators could go here */}
-					{hasRemoteParticipants && (
-						<div className="flex justify-center !space-x-1 !mt-4">
-							{[1, 2, 3, 4, 5].map((bar) => (
-								<div
-									key={bar}
-									className="w-1 bg-white rounded-full animate-pulse"
-									style={{
-										height: `${Math.random() * 20 + 10}px`,
-										animationDelay: `${bar * 0.1}s`,
-									}}
-								/>
-							))}
+							<Button
+								variant="destructive"
+								className="rounded-full w-12 h-12 hover:cursor-pointer"
+								onClick={onLeaveCall}
+								title="End call"
+							>
+								<PhoneOff className="w-6 h-6" />
+							</Button>
+
+							<Button
+								variant="outline"
+								className="rounded-full w-12 h-12 hover:cursor-pointer"
+								title="Settings"
+							>
+								<Settings className="w-6 h-6" />
+							</Button>
 						</div>
-					)}
+					</div>
+
+					{/* Connection status indicator */}
+					<div className="absolute top-4 left-4 text-white text-sm">
+						<div className="flex items-center !space-x-2">
+							<div
+								className={cn(
+									"w-2 h-2 rounded-full",
+									hasRemoteParticipants
+										? "bg-green-500"
+										: "bg-yellow-500 animate-pulse"
+								)}
+							/>
+							<span>
+								{hasRemoteParticipants
+									? `Connected (${remoteStreams.size} participant${remoteStreams.size > 1 ? "s" : ""})`
+									: "Connecting..."}
+							</span>
+						</div>
+					</div>
 				</div>
 			</div>
 		);
-	};
-
-	return (
-		<div className="fixed max-h-screen h-screen w-screen max-w-screen flex flex-col items-center justify-center z-[50] bg-black">
-			<div className="h-full w-full relative md:w-[60%] md:h-[80%]">
-				{showVideo ? renderVideoCall() : renderAudioCall()}
-
-				{/* Controls */}
-				<div className="!p-6 absolute bottom-0 !mx-auto bg-inherit w-full">
-					<div className="flex items-center justify-center !space-x-4">
-						<Button
-							variant={isAudioEnabled ? "default" : "destructive"}
-							className="rounded-full w-12 h-12 hover:cursor-pointer"
-							onClick={onToggleAudio}
-							title={isAudioEnabled ? "Mute microphone" : "Unmute microphone"}
-						>
-							{isAudioEnabled ? (
-								<Mic className="w-6 h-6" />
-							) : (
-								<MicOff className="w-6 h-6" />
-							)}
-						</Button>
-
-						<Button
-							variant={isVideoEnabled ? "default" : "destructive"}
-							className="rounded-full w-12 h-12 hover:cursor-pointer"
-							onClick={onToggleVideo}
-							title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
-						>
-							{isVideoEnabled ? (
-								<Video className="w-6 h-6" />
-							) : (
-								<VideoOff className="w-6 h-6" />
-							)}
-						</Button>
-
-						<Button
-							variant={isScreenSharing ? "default" : "outline"}
-							className="rounded-full w-12 h-12 hover:cursor-pointer"
-							onClick={onToggleScreenShare}
-							title={isScreenSharing ? "Stop screen share" : "Share screen"}
-						>
-							{isScreenSharing ? (
-								<MonitorOff className="w-6 h-6" />
-							) : (
-								<Monitor className="w-6 h-6" />
-							)}
-						</Button>
-
-						<Button
-							variant="destructive"
-							className="rounded-full w-12 h-12 hover:cursor-pointer"
-							onClick={onLeaveCall}
-							title="End call"
-						>
-							<PhoneOff className="w-6 h-6" />
-						</Button>
-
-						<Button
-							variant="outline"
-							className="rounded-full w-12 h-12 hover:cursor-pointer"
-							title="Settings"
-						>
-							<Settings className="w-6 h-6" />
-						</Button>
-					</div>
-				</div>
-
-				{/* Connection status indicator */}
-				<div className="absolute top-4 left-4 text-white text-sm">
-					<div className="flex items-center !space-x-2">
-						<div
-							className={cn(
-								"w-2 h-2 rounded-full",
-								hasRemoteParticipants
-									? "bg-green-500"
-									: "bg-yellow-500 animate-pulse"
-							)}
-						/>
-						<span>
-							{hasRemoteParticipants
-								? `Connected (${remoteStreams.size} participant${remoteStreams.size > 1 ? "s" : ""})`
-								: "Connecting..."}
-						</span>
-					</div>
-				</div>
-			</div>
-		</div>
-	);
-});
+	}
+);
 
 CallInterface.displayName = "CallInterface";
 
