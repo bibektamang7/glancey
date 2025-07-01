@@ -19,17 +19,20 @@ import {
 } from "socket-events";
 import { useSession } from "next-auth/react";
 
-interface RemoteStream {
-	userId: string;
-	stream: MediaStream;
-	audioConsumer?: Consumer;
-	videoConsumer?: Consumer;
-	screenConsumer?: Consumer;
+interface ConsumerProps {
+	id: string;
+	producerId: string;
+	kind: string;
+	producerPaused: boolean;
+	type: string;
+	rtpCapabilities: any;
+	appData?: any;
 }
 
 interface MediasoupClientHook {
 	localVideoRef: React.RefObject<HTMLVideoElement | null>;
-	remoteStreams: Map<string, RemoteStream>;
+	remoteVideoRef: React.RefObject<HTMLVideoElement | null>;
+	remoteStream: MediaStream | null;
 	isAudioEnabled: boolean;
 	isVideoEnabled: boolean;
 	isScreenSharing: boolean;
@@ -40,9 +43,6 @@ interface MediasoupClientHook {
 	toggleScreenShare: () => void;
 	handleVideoCallAccepted: (chatId: string) => void;
 	handleAudioCallAccepted: (chatId: string) => void;
-	getRemoteVideoRef: (
-		userId: string
-	) => React.RefObject<HTMLVideoElement | null>;
 	localStreamRef: React.RefObject<MediaStream | null>;
 }
 
@@ -60,59 +60,28 @@ export function useMediasoupClient(
 	const [audioProducer, setAudioProducer] = useState<Producer | null>(null);
 	const [videoProducer, setVideoProducer] = useState<Producer | null>(null);
 	const [screenProducer, setScreenProducer] = useState<Producer | null>(null);
+	const [audioConsumer, setAudioConsumer] = useState<Consumer | null>(null);
+	const [videoConsumer, setVideoConsumer] = useState<Consumer | null>(null);
+	const [screenConsumer, setScreenConsumer] = useState<Consumer | null>(null);
+
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true);
 	const [isVideoEnabled, setIsVideoEnabled] = useState(true);
 	const [isScreenSharing, setIsScreenSharing] = useState(false);
 	const [currentCallType, setCurrentCallType] = useState<CALLTYPE>(callType);
 
-	const [remoteStreams, setRemoteStreams] = useState<Map<string, RemoteStream>>(
-		new Map()
-	);
-	const remoteVideoRefs = useRef<
-		Map<string, React.RefObject<HTMLVideoElement | null>>
-	>(new Map());
+	const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
 	const localVideoRef = useRef<HTMLVideoElement>(null);
+	const remoteVideoRef = useRef<HTMLVideoElement>(null);
 	const localStreamRef = useRef<MediaStream | null>(null);
 	const screenStreamRef = useRef<MediaStream | null>(null);
 
 	const deviceRef = useRef<Device | null>(null);
 	const isInitializingRef = useRef(false);
 
-	// Initialize device
 	useEffect(() => {
-		const initializeDevice = async () => {
-			if (deviceRef.current || isInitializingRef.current) {
-				return;
-			}
-
-			isInitializingRef.current = true;
-			try {
-				const newDevice = new Device();
-				deviceRef.current = newDevice;
-				console.log("Device initialized successfully");
-			} catch (error) {
-				console.error("Failed to initialize device:", error);
-			} finally {
-				isInitializingRef.current = false;
-			}
-		};
-
-		initializeDevice();
-	}, []);
-
-	const getRemoteVideoRef = useCallback(
-		(userId: string) => {
-			if (!remoteVideoRefs.current.has(userId)) {
-				remoteVideoRefs.current.set(
-					userId,
-					React.createRef<HTMLVideoElement | null>()
-				);
-			}
-			return remoteVideoRefs.current.get(userId)!;
-		},
-		[remoteStreams, remoteVideoRefs]
-	);
+		console.log("video consumer is here", videoConsumer);
+	}, [videoConsumer]);
 
 	const createConsumerTransport = useCallback(async () => {
 		if (isConsumerTransportCreated || recvTransportRef.current) {
@@ -163,7 +132,10 @@ export function useMediasoupClient(
 							await deviceRef.current.load({
 								routerRtpCapabilities: payload.rtpCapabilities,
 							});
-							console.log("Device loaded with RTP capabilities");
+							console.log(
+								"Device loaded with RTP capabilities",
+								deviceRef.current
+							);
 						} catch (error) {
 							console.error("Failed to load device:", error);
 							return;
@@ -187,7 +159,6 @@ export function useMediasoupClient(
 					if (payload.chatId === room.id) {
 						const transport = await createSendTransport(payload.transport);
 						if (transport) {
-							// Start producing after transport is created
 							await startProducing();
 						}
 					}
@@ -205,8 +176,27 @@ export function useMediasoupClient(
 					handleConsumerClosed(payload);
 					break;
 
+				case "resumed":
+					if (remoteStream && remoteVideoRef.current) {
+						remoteVideoRef.current.srcObject = remoteStream;
+						const onLoaded = () => {
+							remoteVideoRef.current
+								?.play()
+								.then(() => console.log("Resumed media playback"))
+								.catch((err) =>
+									console.error("Failed to resume playback:", err)
+								);
+						};
+						remoteVideoRef.current.addEventListener(
+							"loadedmetadata",
+							onLoaded,
+							{ once: true }
+						);
+					}
+					break;
+
 				case "userLeft":
-					handleUserLeft(payload.userId);
+					handleUserLeft();
 					break;
 
 				case "newProducer":
@@ -244,23 +234,25 @@ export function useMediasoupClient(
 
 							socket.addEventListener("message", onConsumerTransportConnected);
 						} else {
+							console.log(
+								"thisis producer id in bro",
+								payload.producerId,
+								session.data?.user?.id
+							);
 							handleConsume(payload.producerId, payload.senderUserId);
 						}
 					}
 					break;
 			}
 		},
-		[room.id, session.data?.user?.id, socket, createConsumerTransport]
+		[
+			room.id,
+			session.data?.user?.id,
+			socket,
+			createConsumerTransport,
+			remoteStream,
+		]
 	);
-
-	useEffect(() => {
-		if (!socket) return;
-
-		socket.addEventListener("message", handleSocketMessage);
-		return () => {
-			socket.removeEventListener("message", handleSocketMessage);
-		};
-	}, [socket, handleSocketMessage]);
 
 	const handleAudioCallAccepted = useCallback(
 		async (chatId: string) => {
@@ -318,101 +310,75 @@ export function useMediasoupClient(
 
 	const handleProducerClosed = useCallback(
 		(data: { producerId: string; userId: string; kind?: string }) => {
-			console.log(
-				"Producer closed:",
-				data.producerId,
-				"from user:",
-				data.userId
-			);
+			if (data.kind === "audio" && audioConsumer) {
+				audioConsumer.close();
+				setAudioConsumer(null);
+			} else if (data.kind === "video" && videoConsumer) {
+				videoConsumer.close();
+				setVideoConsumer(null);
+			} else if (screenConsumer) {
+				screenConsumer.close();
+				setScreenConsumer(null);
+			}
 
-			setRemoteStreams((prev) => {
-				const newStreams = new Map(prev);
-				const userStream = newStreams.get(data.userId);
-				if (userStream) {
-					if (data.kind === "audio" && userStream.audioConsumer) {
-						userStream.audioConsumer.close();
-						userStream.audioConsumer = undefined;
-					} else if (data.kind === "video" && userStream.videoConsumer) {
-						userStream.videoConsumer.close();
-						userStream.videoConsumer = undefined;
-					} else if (userStream.screenConsumer) {
-						userStream.screenConsumer.close();
-						userStream.screenConsumer = undefined;
-					}
+			// Recreate remote stream without the closed track
+			const newStream = new MediaStream();
+			if (audioConsumer && data.kind !== "audio") {
+				newStream.addTrack(audioConsumer.track);
+			}
+			if (videoConsumer && data.kind !== "video") {
+				newStream.addTrack(videoConsumer.track);
+			}
+			if (screenConsumer && !data.kind) {
+				newStream.addTrack(screenConsumer.track);
+			}
 
-					const newStream = new MediaStream();
-					if (userStream.audioConsumer) {
-						newStream.addTrack(userStream.audioConsumer.track);
-					}
-					if (userStream.videoConsumer) {
-						newStream.addTrack(userStream.videoConsumer.track);
-					}
-					if (userStream.screenConsumer) {
-						newStream.addTrack(userStream.screenConsumer.track);
-					}
-
-					userStream.stream = newStream;
-
-					const videoRef = getRemoteVideoRef(data.userId);
-					if (videoRef.current) {
-						videoRef.current.srcObject = newStream;
-					}
-				}
-				return newStreams;
-			});
+			setRemoteStream(newStream);
+			if (remoteVideoRef.current) {
+				remoteVideoRef.current.srcObject = newStream;
+			}
 		},
-		[getRemoteVideoRef]
+		[audioConsumer, videoConsumer, screenConsumer]
 	);
 
 	const handleConsumerClosed = useCallback(
 		(data: { consumerId: string; userId: string }) => {
-			console.log(
-				"Consumer closed:",
-				data.consumerId,
-				"for user:",
-				data.userId
-			);
-
-			setRemoteStreams((prev) => {
-				const newStreams = new Map(prev);
-				const userStream = newStreams.get(data.userId);
-				if (userStream) {
-					if (userStream.audioConsumer?.id === data.consumerId) {
-						userStream.audioConsumer.close();
-						userStream.audioConsumer = undefined;
-					} else if (userStream.videoConsumer?.id === data.consumerId) {
-						userStream.videoConsumer.close();
-						userStream.videoConsumer = undefined;
-					} else if (userStream.screenConsumer?.id === data.consumerId) {
-						userStream.screenConsumer.close();
-						userStream.screenConsumer = undefined;
-					}
-				}
-				return newStreams;
-			});
+			if (audioConsumer?.id === data.consumerId) {
+				audioConsumer.close();
+				setAudioConsumer(null);
+			} else if (videoConsumer?.id === data.consumerId) {
+				videoConsumer.close();
+				setVideoConsumer(null);
+			} else if (screenConsumer?.id === data.consumerId) {
+				screenConsumer.close();
+				setScreenConsumer(null);
+			}
 		},
-		[]
+		[audioConsumer, videoConsumer, screenConsumer]
 	);
 
-	const handleUserLeft = useCallback((userId: string) => {
-		console.log("User left:", userId);
+	const handleUserLeft = useCallback(() => {
+		// Close all consumers
+		audioConsumer?.close();
+		videoConsumer?.close();
+		screenConsumer?.close();
 
-		setRemoteStreams((prev) => {
-			const newStreams = new Map(prev);
-			const userStream = newStreams.get(userId);
-			if (userStream) {
-				userStream.audioConsumer?.close();
-				userStream.videoConsumer?.close();
-				userStream.screenConsumer?.close();
+		// Stop remote stream tracks
+		if (remoteStream) {
+			remoteStream.getTracks().forEach((track) => track.stop());
+		}
 
-				userStream.stream.getTracks().forEach((track) => track.stop());
-				newStreams.delete(userId);
-			}
-			return newStreams;
-		});
+		// Reset states
+		setAudioConsumer(null);
+		setVideoConsumer(null);
+		setScreenConsumer(null);
+		setRemoteStream(null);
 
-		remoteVideoRefs.current.delete(userId);
-	}, []);
+		// Clear remote video element
+		if (remoteVideoRef.current) {
+			remoteVideoRef.current.srcObject = null;
+		}
+	}, [audioConsumer, videoConsumer, screenConsumer, remoteStream]);
 
 	const createSendTransport = useCallback(
 		async (transportOptions: any) => {
@@ -546,15 +512,6 @@ export function useMediasoupClient(
 		[socket, room.id, session.data?.user?.id]
 	);
 
-	interface ConsumerProps {
-		id: string;
-		producerId: string;
-		kind: string;
-		producerPaused: boolean;
-		type: string;
-		rtpCapabilities: any;
-		appData?: any;
-	}
 	const createConsumer = useCallback(
 		async (
 			{
@@ -589,68 +546,56 @@ export function useMediasoupClient(
 					JSON.stringify({
 						type: "resume",
 						payload: {
+							producerUserId: userId,
+							sender: session.data?.user?.id,
 							consumerId: consumer.id,
 							chatId: room.id,
 						},
 					})
 				);
 
-				setRemoteStreams((prev) => {
-					const newStreams = new Map(prev);
-					let userStream = newStreams.get(userId);
-
-					if (!userStream) {
-						userStream = {
-							userId: userId,
-							stream: new MediaStream(),
-						};
-						newStreams.set(userId, userStream);
+				// Set consumer based on kind and appData
+				if (kind === "audio") {
+					setAudioConsumer(consumer);
+				} else if (kind === "video") {
+					if (appData?.mediaType === "screen") {
+						setScreenConsumer(consumer);
+					} else {
+						setVideoConsumer(consumer);
 					}
+				}
 
-					// Add the track to the stream
-					userStream.stream.addTrack(consumer.track);
-
-					// Assign consumer based on kind and appData
-					if (kind === "audio") {
-						userStream.audioConsumer = consumer;
-					} else if (kind === "video") {
-						if (appData?.mediaType === "screen") {
-							userStream.screenConsumer = consumer;
-						} else {
-							userStream.videoConsumer = consumer;
-						}
-					}
-
-					return newStreams;
+				// Update remote stream
+				setRemoteStream((prevStream) => {
+					const newStream = prevStream ? prevStream.clone() : new MediaStream();
+					newStream.addTrack(consumer.track);
+					return newStream;
 				});
 
-				// Set video element source AFTER state update
-				// if (kind === "video") {
-				// 	const videoRef = getRemoteVideoRef(userId);
-				// 	console.log("what is here that makes not working", videoRef);
-				// 	console.log(remoteVideoRefs);
-				// 	if (videoRef.current) {
-				// 		alert("yeta ko k xa ra hau");
-				// 		const userStream = remoteStreams.get(userId);
-				// 		if (userStream) {
-				// 			console.log(userStream.stream, "this is user stram");
-				// 			videoRef.current.srcObject = userStream.stream;
-
-				// 			// Ensure video plays
-				// 			videoRef.current.play().catch(console.error);
-				// 		}
-				// 	}
-				// }
+				// Set video element source for video tracks
+				if (kind === "video") {
+					setTimeout(() => {
+						if (remoteVideoRef.current && remoteStream) {
+							remoteVideoRef.current.srcObject = remoteStream;
+							const handleLoaded = () => {
+								remoteVideoRef.current?.play().catch(console.error);
+							};
+							remoteVideoRef.current.addEventListener(
+								"loadedmetadata",
+								handleLoaded,
+								{ once: true }
+							);
+						}
+					}, 100);
+				}
 			} catch (error) {
 				console.error("Failed to create consumer:", error);
 			}
 		},
-		[socket, room.id, getRemoteVideoRef, createConsumerTransport]
+		[socket, room.id, createConsumerTransport, remoteStream]
 	);
 
 	const startProducing = useCallback(async () => {
-		console.log("Starting to produce media...");
-
 		if (!sendTransportRef.current || !localStreamRef.current) {
 			console.error("Transport or stream not available for producing");
 			return;
@@ -667,13 +612,11 @@ export function useMediasoupClient(
 					appData: { mediaType: "audio" },
 				});
 				setAudioProducer(audioProducer);
-				console.log("Audio producer created:", audioProducer.id);
 			}
 
 			// Produce video only for video calls
 			if (currentCallType === "video") {
 				const videoTracks = localStreamRef.current.getVideoTracks();
-				console.log("Video tracks available:", videoTracks.length);
 
 				if (videoTracks.length > 0) {
 					const videoProducer = await sendTransportRef.current.produce({
@@ -681,7 +624,6 @@ export function useMediasoupClient(
 						appData: { mediaType: "video" },
 					});
 					setVideoProducer(videoProducer);
-					console.log("Video producer created:", videoProducer.id);
 				}
 			}
 		} catch (error) {
@@ -709,16 +651,9 @@ export function useMediasoupClient(
 					break;
 			}
 
-			console.log("Requesting media with constraints:", constraints);
 			const stream = await navigator.mediaDevices.getUserMedia(constraints);
 			localStreamRef.current = stream;
 
-			console.log("Media stream obtained:", {
-				audioTracks: stream.getAudioTracks().length,
-				videoTracks: stream.getVideoTracks().length,
-			});
-
-			// Set local video element
 			if (localVideoRef.current && callType === "video") {
 				localVideoRef.current.srcObject = stream;
 			}
@@ -767,10 +702,7 @@ export function useMediasoupClient(
 				console.error("Socket not available");
 				return;
 			}
-
-			console.log("Joining room:", roomId, "Call type:", callType);
 			setCurrentCallType(callType);
-
 			try {
 				const stream = await getUserMedia(callType);
 				console.log("Successfully obtained media stream");
@@ -810,6 +742,20 @@ export function useMediasoupClient(
 			setScreenProducer(null);
 		}
 
+		// Close all consumers
+		if (audioConsumer) {
+			audioConsumer.close();
+			setAudioConsumer(null);
+		}
+		if (videoConsumer) {
+			videoConsumer.close();
+			setVideoConsumer(null);
+		}
+		if (screenConsumer) {
+			screenConsumer.close();
+			setScreenConsumer(null);
+		}
+
 		// Close transports
 		if (sendTransportRef.current) {
 			sendTransportRef.current.close();
@@ -838,19 +784,19 @@ export function useMediasoupClient(
 			screenStreamRef.current = null;
 		}
 
-		// Clean up remote streams
-		remoteStreams.forEach((userStream) => {
-			userStream.audioConsumer?.close();
-			userStream.videoConsumer?.close();
-			userStream.screenConsumer?.close();
-			userStream.stream.getTracks().forEach((track) => {
+		// Stop remote stream tracks
+		if (remoteStream) {
+			remoteStream.getTracks().forEach((track) => {
 				track.stop();
 			});
-		});
+		}
 
-		// Clear local video element
+		// Clear video elements
 		if (localVideoRef.current) {
 			localVideoRef.current.srcObject = null;
+		}
+		if (remoteVideoRef.current) {
+			remoteVideoRef.current.srcObject = null;
 		}
 
 		// Reset states
@@ -858,22 +804,25 @@ export function useMediasoupClient(
 		setIsConsumerTransportCreated(false);
 		setIsAudioEnabled(true);
 		setIsVideoEnabled(true);
-		setRemoteStreams(new Map());
-		remoteVideoRefs.current.clear();
+		setRemoteStream(null);
 
 		console.log("Cleanup completed");
-	}, [audioProducer, videoProducer, screenProducer, remoteStreams]);
+	}, [
+		audioProducer,
+		videoProducer,
+		screenProducer,
+		audioConsumer,
+		videoConsumer,
+		screenConsumer,
+		remoteStream,
+	]);
 
 	const toggleAudio = useCallback(() => {
-		console.log("Toggling audio, current state:", isAudioEnabled);
-
 		if (audioProducer) {
 			if (isAudioEnabled) {
 				audioProducer.pause();
-				console.log("Audio producer paused");
 			} else {
 				audioProducer.resume();
-				console.log("Audio producer resumed");
 			}
 		}
 
@@ -881,7 +830,6 @@ export function useMediasoupClient(
 		if (localStreamRef.current) {
 			localStreamRef.current.getAudioTracks().forEach((track) => {
 				track.enabled = !isAudioEnabled;
-				console.log("Audio track enabled:", track.enabled);
 			});
 		}
 
@@ -889,15 +837,11 @@ export function useMediasoupClient(
 	}, [audioProducer, isAudioEnabled]);
 
 	const toggleVideo = useCallback(() => {
-		console.log("Toggling video, current state:", isVideoEnabled);
-
 		if (videoProducer) {
 			if (isVideoEnabled) {
 				videoProducer.pause();
-				console.log("Video producer paused");
 			} else {
 				videoProducer.resume();
-				console.log("Video producer resumed");
 			}
 		}
 
@@ -905,7 +849,6 @@ export function useMediasoupClient(
 		if (localStreamRef.current) {
 			localStreamRef.current.getVideoTracks().forEach((track) => {
 				track.enabled = !isVideoEnabled;
-				console.log("Video track enabled:", track.enabled);
 			});
 		}
 
@@ -913,15 +856,12 @@ export function useMediasoupClient(
 	}, [videoProducer, isVideoEnabled]);
 
 	const toggleScreenShare = useCallback(async () => {
-		console.log("Toggling screen share, current state:", isScreenSharing);
-
 		try {
 			if (isScreenSharing) {
 				// Stop screen sharing
 				if (screenProducer) {
 					screenProducer.close();
 					setScreenProducer(null);
-					console.log("Screen producer closed");
 				}
 				if (screenStreamRef.current) {
 					screenStreamRef.current.getTracks().forEach((track) => {
@@ -931,7 +871,6 @@ export function useMediasoupClient(
 				}
 				setIsScreenSharing(false);
 			} else {
-				// Start screen sharing
 				const screenStream = await getScreenShare();
 
 				if (sendTransportRef.current && screenStream) {
@@ -942,10 +881,8 @@ export function useMediasoupClient(
 							appData: { mediaType: "screen" },
 						});
 						setScreenProducer(producer);
-						console.log("Screen producer created:", producer.id);
 					}
 
-					// Also handle audio from screen share if available
 					const audioTrack = screenStream.getAudioTracks()[0];
 					if (audioTrack) {
 						await sendTransportRef.current.produce({
@@ -963,10 +900,52 @@ export function useMediasoupClient(
 		}
 	}, [isScreenSharing, screenProducer, getScreenShare]);
 
+	// Initialize device
+	useEffect(() => {
+		const initializeDevice = async () => {
+			if (deviceRef.current || isInitializingRef.current) {
+				return;
+			}
+
+			isInitializingRef.current = true;
+			try {
+				const newDevice = new Device();
+				deviceRef.current = newDevice;
+			} catch (error) {
+				console.error("Failed to initialize device:", error);
+			} finally {
+				isInitializingRef.current = false;
+			}
+		};
+
+		initializeDevice();
+	}, []);
+
+	useEffect(() => {
+		if (videoProducer) {
+			console.log("this is video producer", videoProducer);
+		}
+	}, [videoProducer]);
+	useEffect(() => {
+		if (remoteStream && remoteVideoRef.current) {
+			remoteVideoRef.current.srcObject = remoteStream;
+		}
+	}, [remoteStream]);
+
+	useEffect(() => {
+		if (!socket) return;
+
+		socket.addEventListener("message", handleSocketMessage);
+		return () => {
+			socket.removeEventListener("message", handleSocketMessage);
+		};
+	}, [socket, handleSocketMessage]);
+
 	return {
 		localStreamRef,
 		localVideoRef,
-		remoteStreams,
+		remoteVideoRef,
+		remoteStream,
 		isAudioEnabled,
 		isVideoEnabled,
 		isScreenSharing,
@@ -977,6 +956,5 @@ export function useMediasoupClient(
 		toggleScreenShare,
 		handleAudioCallAccepted,
 		handleVideoCallAccepted,
-		getRemoteVideoRef,
 	};
 }

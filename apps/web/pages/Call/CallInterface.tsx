@@ -49,7 +49,6 @@ const CallInterface = memo(
 		const {
 			localStreamRef,
 			localVideoRef,
-			remoteStreams,
 			isAudioEnabled,
 			isVideoEnabled,
 			isScreenSharing,
@@ -60,19 +59,8 @@ const CallInterface = memo(
 			leaveRoom,
 			handleAudioCallAccepted,
 			handleVideoCallAccepted,
-			getRemoteVideoRef,
+			remoteVideoRef,
 		} = useMediasoupClient(room, callType);
-
-		const showVideo = callType === "video";
-		const hasRemoteParticipants = remoteStreams.size > 0;
-
-		// Get the first remote participant for main video display
-		const remoteParticipantId = hasRemoteParticipants
-			? Array.from(remoteStreams.keys())[0]
-			: null;
-		const remoteVideoRef = remoteParticipantId
-			? getRemoteVideoRef(remoteParticipantId)
-			: null;
 
 		const onLeaveCall = async () => {
 			await leaveRoom();
@@ -102,128 +90,51 @@ const CallInterface = memo(
 			}
 		}, []);
 
-		useEffect(() => {
-			console.log(
-				remoteVideoRef?.current,
-				"this is remoteVideoRef in video",
-				remoteParticipantId
-			);
-			if (remoteVideoRef?.current && remoteParticipantId) {
-				const remoteStream = remoteStreams.get(remoteParticipantId);
-				console.log("i don't know about here so see", remoteStream);
-				if (remoteStream?.stream) {
-					console.log("Setting remote stream:", remoteStream.stream);
-
-					const videoEl = remoteVideoRef.current;
-
-					videoEl.onloadedmetadata = null;
-
-					videoEl.srcObject = remoteStream.stream;
-					console.log("this is videoElemnt", videoEl);
-
-					videoEl.onloadedmetadata = () => {
-						alert("yeat aaou no ha");
-						videoEl
-							.play()
-							.then(() => {
-								console.log("Remote video playing");
-							})
-							.catch((error) => {
-								console.error("Failed to play remote video:", error);
-							});
-					};
-				}
-			}
-
-			return () => {
-				if (remoteVideoRef?.current) {
-					remoteVideoRef.current.onloadedmetadata = null;
-				}
-			};
-		}, [remoteVideoRef, remoteParticipantId, remoteStreams]);
-
-		// 3. Fix in CallInterface.tsx - renderVideoCall function
 		const renderVideoCall = () => {
-			console.log("this is local stram", localVideoRef.current?.srcObject);
+			console.log(
+				"this is remote video ref",
+				remoteVideoRef.current?.srcObject
+			);
+			return (
+				<div className="relative w-full h-full bg-gray-800">
+					<video
+						ref={remoteVideoRef}
+						autoPlay
+						playsInline
+						className="w-full h-full object-cover"
+						style={{
+							transform: isScreenSharing ? "none" : "scaleX(-1)",
+						}}
+						onLoadedMetadata={() => {
+							console.log("Remote video loaded");
+						}}
+						onError={(e) => {
+							console.error("Remote video error:", e);
+						}}
+					/>
 
-			console.log("this is remite stram", remoteStreams);
-			const hasValidRemoteStream =
-				!!remoteParticipantId &&
-				!!remoteStreams.get(remoteParticipantId)?.stream?.getVideoTracks()
-					.length;
-
-			if (!hasValidRemoteStream) {
-				return (
-					<div className="relative w-full h-full bg-gray-800">
-						{isVideoEnabled && localVideoRef.current && (
+					{/* Local video in corner */}
+					{isVideoEnabled && (
+						<Card className="absolute top-4 right-4 w-48 h-36 overflow-hidden border-2 border-white">
 							<video
 								ref={localVideoRef}
-								src={String(localVideoRef.current.src)}
 								autoPlay
 								playsInline
 								muted
 								className="w-full h-full object-cover"
 								style={{ transform: "scaleX(-1)" }}
 							/>
-						)}
-						{!isVideoEnabled && (
-							<div className="w-full h-full flex items-center justify-center bg-gray-800">
-								<div className="text-white text-center">
-									<VideoOff className="w-16 h-16 mx-auto mb-4" />
-									<p>Camera is off</p>
-								</div>
-							</div>
-						)}
-					</div>
-				);
-			}
+						</Card>
+					)}
 
-			return (
-				<>
-					{Array.from(remoteStreams.values()).map((remoteStream) => {
-						const videoRef = getRemoteVideoRef(remoteStream.userId);
-						<div className="relative w-full h-full bg-gray-800">
-							<video
-								ref={videoRef}
-								autoPlay
-								playsInline
-								className="w-full h-full object-cover"
-								style={{
-									transform: isScreenSharing ? "none" : "scaleX(-1)",
-								}}
-								onLoadedMetadata={() => {
-									console.log("Remote video loaded");
-								}}
-								onError={(e) => {
-									console.error("Remote video error:", e);
-								}}
-							/>
-
-							{/* Local video in corner */}
-							{isVideoEnabled && (
-								<Card className="absolute top-4 right-4 w-48 h-36 overflow-hidden border-2 border-white">
-									<video
-										ref={localVideoRef}
-										autoPlay
-										playsInline
-										muted
-										className="w-full h-full object-cover"
-										style={{ transform: "scaleX(-1)" }}
-									/>
-								</Card>
-							)}
-
-							{/* Screen Share Indicator */}
-							{isScreenSharing && (
-								<div className="absolute top-4 left-4 bg-red-500 text-white !px-3 !py-1 rounded-full text-sm font-medium">
-									<Monitor className="w-4 h-4 inline !mr-1" />
-									Sharing Screen
-								</div>
-							)}
-						</div>;
-					})}
-					{/* Remote video */}
-				</>
+					{/* Screen Share Indicator */}
+					{isScreenSharing && (
+						<div className="absolute top-4 left-4 bg-red-500 text-white !px-3 !py-1 rounded-full text-sm font-medium">
+							<Monitor className="w-4 h-4 inline !mr-1" />
+							Sharing Screen
+						</div>
+					)}
+				</div>
 			);
 		};
 
@@ -237,38 +148,6 @@ const CallInterface = memo(
 				}
 			}
 		}, [isVideoEnabled, localStreamRef.current]);
-
-		// // 5. Debug helper - Add this to monitor stream states
-		useEffect(() => {
-			console.log("Stream states:", {
-				localStream: localStreamRef.current?.id,
-				localVideoTracks: localStreamRef.current?.getVideoTracks().length,
-				remoteStreams: Array.from(remoteStreams.entries()).map(
-					([userId, stream]) => ({
-						userId,
-						streamId: stream.stream.id,
-						videoTracks: stream.stream.getVideoTracks().length,
-						audioTracks: stream.stream.getAudioTracks().length,
-					})
-				),
-				hasRemoteParticipants,
-				remoteParticipantId,
-			});
-		}, [remoteStreams, hasRemoteParticipants, remoteParticipantId]);
-		useEffect(() => {
-			Array.from(remoteStreams.entries()).forEach(([userId, userStream]) => {
-				const videoRef = getRemoteVideoRef(userId);
-				if (videoRef.current && userStream?.stream) {
-					videoRef.current.srcObject = userStream.stream;
-
-					videoRef.current.onloadedmetadata = () => {
-						videoRef.current
-							?.play()
-							.catch((err) => console.error("Remote video play error:", err));
-					};
-				}
-			});
-		}, [remoteStreams]);
 
 		const renderAudioCall = () => {
 			return (
@@ -297,25 +176,6 @@ const CallInterface = memo(
 								? room.callTo.name
 								: room.caller?.name || "Unknown"}
 						</h2>
-						<p className="text-gray-300 !mb-2 text-xs md:text-base">
-							{hasRemoteParticipants ? "Connected" : "Connecting..."}
-						</p>
-
-						{/* Audio level indicators could go here */}
-						{hasRemoteParticipants && (
-							<div className="flex justify-center !space-x-1 !mt-4">
-								{[1, 2, 3, 4, 5].map((bar) => (
-									<div
-										key={bar}
-										className="w-1 bg-white rounded-full animate-pulse"
-										style={{
-											height: `${Math.random() * 20 + 10}px`,
-											animationDelay: `${bar * 0.1}s`,
-										}}
-									/>
-								))}
-							</div>
-						)}
 					</div>
 				</div>
 			);
@@ -324,9 +184,8 @@ const CallInterface = memo(
 		return (
 			<div className="fixed max-h-screen h-screen w-screen max-w-screen flex flex-col items-center justify-center z-[50] bg-black">
 				<div className="h-full w-full relative md:w-[60%] md:h-[80%]">
-					{showVideo ? renderVideoCall() : renderAudioCall()}
+					{callType === "video" ? renderVideoCall() : renderAudioCall()}
 
-					{/* Controls */}
 					<div className="!p-6 absolute bottom-0 !mx-auto bg-inherit w-full">
 						<div className="flex items-center justify-center !space-x-4">
 							<Button
@@ -390,19 +249,7 @@ const CallInterface = memo(
 					{/* Connection status indicator */}
 					<div className="absolute top-4 left-4 text-white text-sm">
 						<div className="flex items-center !space-x-2">
-							<div
-								className={cn(
-									"w-2 h-2 rounded-full",
-									hasRemoteParticipants
-										? "bg-green-500"
-										: "bg-yellow-500 animate-pulse"
-								)}
-							/>
-							<span>
-								{hasRemoteParticipants
-									? `Connected (${remoteStreams.size} participant${remoteStreams.size > 1 ? "s" : ""})`
-									: "Connecting..."}
-							</span>
+							<div className={cn("w-2 h-2 rounded-full")} />
 						</div>
 					</div>
 				</div>
