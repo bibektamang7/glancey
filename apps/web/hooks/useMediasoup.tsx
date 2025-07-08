@@ -67,7 +67,6 @@ export function useMediasoupClient(
 	const [isAudioEnabled, setIsAudioEnabled] = useState(true);
 	const [isVideoEnabled, setIsVideoEnabled] = useState(true);
 	const [isScreenSharing, setIsScreenSharing] = useState(false);
-	const [currentCallType, setCurrentCallType] = useState<CALLTYPE>(callType);
 
 	const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
@@ -256,7 +255,6 @@ export function useMediasoupClient(
 
 	const handleAudioCallAccepted = useCallback(
 		async (chatId: string) => {
-			setCurrentCallType("audio");
 			try {
 				const stream = await getUserMedia("audio");
 				if (stream) {
@@ -283,7 +281,6 @@ export function useMediasoupClient(
 
 	const handleVideoCallAccepted = useCallback(
 		async (chatId: string) => {
-			setCurrentCallType("video");
 			try {
 				const stream = await getUserMedia("video");
 				if (stream) {
@@ -387,8 +384,15 @@ export function useMediasoupClient(
 				return null;
 			}
 			try {
-				const transport =
-					deviceRef.current.createSendTransport(transportOptions);
+				const transport = deviceRef.current.createSendTransport({
+					...transportOptions,
+					iceServers: [
+						{
+							urls: "stun:stun.l.google.com:19302",
+						},
+					],
+					iceTransportPolicy: "all",
+				});
 
 				transport.on(
 					"connect",
@@ -615,7 +619,7 @@ export function useMediasoupClient(
 			}
 
 			// Produce video only for video calls
-			if (currentCallType === "video") {
+			if (callType === "video") {
 				const videoTracks = localStreamRef.current.getVideoTracks();
 
 				if (videoTracks.length > 0) {
@@ -629,7 +633,39 @@ export function useMediasoupClient(
 		} catch (error) {
 			console.error("Failed to start producing:", error);
 		}
-	}, [currentCallType]);
+	}, [callType]);
+	async function getAvailableCamera(constraints = { width: 640, height: 480 }) {
+		try {
+			// First, try default camera
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: constraints,
+				audio: true,
+			});
+			return stream;
+		} catch (err) {
+			console.warn("Default camera failed:", err);
+
+			// Enumerate all video input devices
+			const devices = await navigator.mediaDevices.enumerateDevices();
+			const videoInputs = devices.filter((d) => d.kind === "videoinput");
+
+			for (const device of videoInputs) {
+				try {
+					// Try to get stream from each deviceId explicitly
+					const stream = await navigator.mediaDevices.getUserMedia({
+						video: { deviceId: { exact: device.deviceId }, ...constraints },
+						audio: true,
+					});
+					console.log("Using camera:", device.label);
+					return stream;
+				} catch (e) {
+					console.warn(`Camera ${device.label} unavailable, trying next...`);
+				}
+			}
+
+			throw new Error("No available camera found");
+		}
+	}
 
 	const getUserMedia = useCallback(async (callType: CALLTYPE) => {
 		try {
@@ -651,7 +687,8 @@ export function useMediasoupClient(
 					break;
 			}
 
-			const stream = await navigator.mediaDevices.getUserMedia(constraints);
+			// const stream = await navigator.mediaDevices.getUserMedia(constraints);
+			const stream = await getAvailableCamera();
 			localStreamRef.current = stream;
 
 			if (localVideoRef.current && callType === "video") {
@@ -702,7 +739,6 @@ export function useMediasoupClient(
 				console.error("Socket not available");
 				return;
 			}
-			setCurrentCallType(callType);
 			try {
 				const stream = await getUserMedia(callType);
 				console.log("Successfully obtained media stream");
