@@ -78,10 +78,6 @@ export function useMediasoupClient(
 	const deviceRef = useRef<Device | null>(null);
 	const isInitializingRef = useRef(false);
 
-	useEffect(() => {
-		console.log("video consumer is here", videoConsumer);
-	}, [videoConsumer]);
-
 	const createConsumerTransport = useCallback(async () => {
 		if (isConsumerTransportCreated || recvTransportRef.current) {
 			console.log("Consumer transport already exists");
@@ -99,7 +95,7 @@ export function useMediasoupClient(
 				})
 			);
 		}
-	}, [socket, room.id, session.data?.user?.id, isConsumerTransportCreated]);
+	}, [socket, room.id]);
 
 	const handleConsume = (producerId: string, consumerUserId: string) => {
 		if (!recvTransportRef.current) return;
@@ -131,10 +127,6 @@ export function useMediasoupClient(
 							await deviceRef.current.load({
 								routerRtpCapabilities: payload.rtpCapabilities,
 							});
-							console.log(
-								"Device loaded with RTP capabilities",
-								deviceRef.current
-							);
 						} catch (error) {
 							console.error("Failed to load device:", error);
 							return;
@@ -218,10 +210,6 @@ export function useMediasoupClient(
 										onConsumerTransportConnected
 									);
 								} else if (message.type === "consumer_transport_created") {
-									console.log(
-										"Consumer transport params:",
-										message.payload.params
-									);
 									const transport = await createRecvTransport(
 										message.payload.params
 									);
@@ -231,7 +219,9 @@ export function useMediasoupClient(
 								}
 							};
 
-							socket.addEventListener("message", onConsumerTransportConnected);
+							socket.addEventListener("message", onConsumerTransportConnected, {
+								once: true,
+							});
 						} else {
 							console.log(
 								"thisis producer id in bro",
@@ -244,13 +234,7 @@ export function useMediasoupClient(
 					break;
 			}
 		},
-		[
-			room.id,
-			session.data?.user?.id,
-			socket,
-			createConsumerTransport,
-			remoteStream,
-		]
+		[room.id, session.data?.user?.id, socket]
 	);
 
 	const handleAudioCallAccepted = useCallback(
@@ -424,12 +408,12 @@ export function useMediasoupClient(
 								const message = JSON.parse(event.data);
 
 								if (message.type === "produced_media") {
-									if (message.payload.userId !== session.data?.user?.id) {
-										if (!recvTransportRef.current) {
-											createConsumerTransport();
-										}
-										return;
-									}
+									// if (message.payload.userId !== session.data?.user?.id) {
+									// 	if (!recvTransportRef.current) {
+									// 		createConsumerTransport();
+									// 	}
+									// 	return;
+									// }
 
 									callback({ id: message.payload.producerId });
 									socket?.removeEventListener("message", handleProducerCreated);
@@ -463,7 +447,7 @@ export function useMediasoupClient(
 				return null;
 			}
 		},
-		[socket, room.id, createConsumerTransport, session.data?.user?.id]
+		[socket, room.id]
 	);
 
 	const createRecvTransport = useCallback(
