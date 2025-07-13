@@ -175,11 +175,60 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 		});
 	};
 	const handleAudioCallAccepted = (chatId: string, acceptedUser: User) => {
-		// send socket events for rtp capabilities
-		// just show user joined the call
+		//TODO: show user join
+		toast.dismiss();
+		setCallType("audio");
+		setRoom({
+			caller: acceptedUser,
+			id: chatId,
+		});
 	};
-	const handleIncomingCallJoinRequest = (senderUser: User, chatId: string) => {
-		//TODO: not sure: logic
+
+	const handleVideoCallAccepted = (caller: User, chatId: string) => {
+		toast.dismiss();
+		setCallType("video");
+		setRoom({
+			caller,
+			id: chatId,
+		});
+	};
+	const handleIncomingCallJoinRequest = (
+		requestedUser: User,
+		chatId: string
+	) => {
+		toast("📞  Request to Join call", {
+			style: {
+				width: "fit-content",
+			},
+			duration: 1000 * 60,
+			description: (
+				<div className="flex items-center justify-start gap-2 text-black !mt-2 !mr-2">
+					<Avatar>
+						<AvatarImage src={requestedUser.image} />
+						<AvatarFallback>{requestedUser.name}</AvatarFallback>
+					</Avatar>
+					<div>
+						<span className="font-semibold">{requestedUser.name}</span>
+					</div>
+				</div>
+			),
+			action: (
+				<div className="flex gap-4 items-center justify-center !mt-2 !ml-4">
+					<PhoneCall
+						color="green"
+						size={16}
+						className="hover:cursor-pointer hover:bg-slate-300 hover:rounded-md"
+						onClick={() => handleVideoCallAccepted(requestedUser, chatId)}
+					/>
+					<PhoneOff
+						color="red"
+						size={16}
+						className="hover:cursor-pointer hover:bg-slate-400 hover:rounded-md"
+						onClick={() => handleRejectCall("request", chatId)}
+					/>
+				</div>
+			),
+		});
 	};
 	const handleIncomingCallJoinAccepted = (chatId: string) => {
 		//TODO: do other logics too
@@ -190,18 +239,6 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 		toast("Join call rejected.");
 	};
 	const handleUserLeave = () => {};
-	const handleRtpCapabilities = (chatId: string, rtpCapabilities: any) => {};
-	const handleProducerTransportCreated = (params: any) => {};
-	const handleProducedMedia = (
-		user: User,
-		chatId: string,
-		producerId: string
-	) => {};
-	const handleConsumerTransportCreated = (params: any, chatId: string) => {};
-	const handleConsumerTransportConnected = (message: any, chatId: string) => {};
-	const handleSubscribed = (params: any, chatId: string) => {};
-	const handleResumed = (message: any) => {};
-	const handleErrorOnMediaSoup = (message: string) => {};
 
 	const handleSocketCallEvents = (event: MessageEvent<any>) => {
 		const message = JSON.parse(event.data);
@@ -230,7 +267,7 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 				break;
 			}
 			case REQUEST_VIDEO_CALL: {
-				handleIncomingCallJoinRequest(payload.from, payload.chatId);
+				handleIncomingCallJoinRequest(payload.sender, payload.chatId);
 				break;
 			}
 			case INCOMING_VIDEO_CALL: {
@@ -245,40 +282,11 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 			case VIDEO_CALL_REJECTED: {
 				break;
 			}
-			case "rtpCapabilities": {
-				handleRtpCapabilities(payload.chatId, payload.rtpCapabilities);
-				break;
-			}
-			case "producer_transport_created": {
-				handleProducerTransportCreated(payload);
-				break;
-			}
-			// ONE LEFT HERE
-			case "produced_media": {
-				handleProducedMedia(payload.user, payload.chatId, payload.producerId);
-				break;
-			}
-			case "consumer_transport_created": {
-				handleConsumerTransportCreated(payload.params, payload.chatId);
-				break;
-			}
-			case "consumer_transport_connected": {
-				handleConsumerTransportConnected(payload.message, payload.chatId);
-				break;
-			}
-			case "subscribed": {
-				handleSubscribed(payload.params, payload.chatId);
-				break;
-			}
-			case "resumed": {
-				handleResumed(payload.message);
-				break;
-			}
-			case "error_on_media": {
-				handleErrorOnMediaSoup(payload.message);
-				break;
-			}
 		}
+	};
+	const closeCallInterfaceOnLeave = () => {
+		setRoom(null);
+		setCallType(null);
 	};
 	useEffect(() => {
 		if (!socket) return;
@@ -306,6 +314,7 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 				<CallInterface
 					callType={stableCallType}
 					room={stableRoom!}
+					closeCallInterfaceOnLeave={closeCallInterfaceOnLeave}
 				/>
 			)}
 			{children}

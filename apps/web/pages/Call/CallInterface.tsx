@@ -11,7 +11,7 @@ import {
 	Monitor,
 	MonitorOff,
 	PhoneOff,
-	Settings,
+	// Settings,
 	Video,
 	VideoOff,
 } from "lucide-react";
@@ -124,15 +124,7 @@ const CallInterface = memo(
 		}, [remoteVideoRef, remoteStream]);
 
 		const renderVideoCall = () => {
-			console.log(
-				"Video call render - hasValidRemoteStream:",
-				hasValidRemoteStream,
-				"isVideoEnabled:",
-				isVideoEnabled
-			);
-
 			if (!hasValidRemoteStream) {
-				// Show local video only when no remote stream
 				return (
 					<div className="relative w-full h-full bg-gray-800">
 						{isVideoEnabled ? (
@@ -152,16 +144,6 @@ const CallInterface = memo(
 								</div>
 							</div>
 						)}
-
-						{/* Connection status when waiting for remote */}
-						{/* {!hasRemoteParticipants && (
-							<div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-								<div className="text-white text-center">
-									<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-									<p>Waiting for other participant...</p>
-								</div>
-							</div>
-						)} */}
 					</div>
 				);
 			}
@@ -198,28 +180,13 @@ const CallInterface = memo(
 			);
 		};
 
-		// Ensure local video stays connected
 		useEffect(() => {
 			if (localVideoRef.current && localStreamRef.current && isVideoEnabled) {
-				// Re-attach local stream if it gets disconnected
 				if (localVideoRef.current.srcObject !== localStreamRef.current) {
-					console.log("Re-attaching local video stream");
 					localVideoRef.current.srcObject = localStreamRef.current;
 				}
 			}
 		}, [isVideoEnabled, localStreamRef.current]);
-
-		// Debug helper - monitor stream states
-		useEffect(() => {
-			console.log("Stream states:", {
-				localStream: localStreamRef.current?.id,
-				localVideoTracks: localStreamRef.current?.getVideoTracks().length || 0,
-				remoteStream: remoteStream?.id,
-				remoteVideoTracks: remoteStream?.getVideoTracks().length || 0,
-				remoteAudioTracks: remoteStream?.getAudioTracks().length || 0,
-				hasRemoteParticipants,
-			});
-		}, [remoteStream, hasRemoteParticipants, localStreamRef.current]);
 
 		const renderAudioCall = () => {
 			return (
@@ -229,8 +196,8 @@ const CallInterface = memo(
 						gradientRef.current
 					)}
 				>
-					<div className="text-center text-white mt-12">
-						<div className="w-12 h-12 md:w-16 md:h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-2">
+					<div className="text-center text-white !mt-12">
+						<div className="relative w-12 h-12 md:w-16 md:h-16 rounded-full flex flex-col items-center justify-center !mx-auto !mb-2">
 							<Avatar className="w-full h-full">
 								<AvatarImage
 									src={room.caller ? room.caller.image : room.callTo?.image}
@@ -243,18 +210,35 @@ const CallInterface = memo(
 								</AvatarFallback>
 							</Avatar>
 						</div>
-						<h2 className="text-lg font-semibold md:text-xl">
-							{!room.caller && room.callTo
-								? room.callTo.name
-								: room.caller?.name || "Unknown"}
+						<h2 className="text-lg font-semibold md:text-xl text-white">
+							{room.caller
+								? room.caller.name
+								: room.callTo
+									? room.callTo.name
+									: "Unknown User"}
 						</h2>
-						<p className="text-gray-300 mb-2 text-xs md:text-base">
+						<div>
+							<video
+								ref={localVideoRef}
+								autoPlay
+								playsInline
+								muted
+							></video>
+							{hasRemoteParticipants && remoteStream && (
+								<ReactPlayer
+									url={remoteStream}
+									playing
+								/>
+							)}
+						</div>
+
+						<p className="text-gray-300 !mb-2 text-xs md:text-base">
 							{hasRemoteParticipants ? "Connected" : "Connecting..."}
 						</p>
 
 						{/* Audio level indicators */}
 						{hasRemoteParticipants && (
-							<div className="flex justify-center space-x-1 mt-4">
+							<div className="flex justify-center !space-x-1 !mt-4">
 								{[1, 2, 3, 4, 5].map((bar) => (
 									<div
 										key={bar}
@@ -277,9 +261,8 @@ const CallInterface = memo(
 				<div className="h-full w-full relative md:w-[60%] md:h-[80%]">
 					{showVideo ? renderVideoCall() : renderAudioCall()}
 
-					{/* Controls */}
-					<div className="p-6 absolute bottom-0 mx-auto bg-inherit w-full">
-						<div className="flex items-center justify-center space-x-4">
+					<div className="!p-6 !mb-8 absolute bottom-0 !mx-auto bg-inherit w-full">
+						<div className="flex items-center justify-center !space-x-4">
 							<Button
 								variant={isAudioEnabled ? "default" : "destructive"}
 								className="rounded-full w-12 h-12 hover:cursor-pointer"
@@ -332,13 +315,13 @@ const CallInterface = memo(
 								<PhoneOff className="w-6 h-6" />
 							</Button>
 
-							<Button
+							{/* <Button
 								variant="outline"
 								className="rounded-full w-12 h-12 hover:cursor-pointer"
 								title="Settings"
 							>
 								<Settings className="w-6 h-6" />
-							</Button>
+							</Button> */}
 						</div>
 					</div>
 

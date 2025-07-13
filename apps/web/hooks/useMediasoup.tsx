@@ -618,13 +618,10 @@ export function useMediasoupClient(
 			console.error("Failed to start producing:", error);
 		}
 	}, [callType]);
-	async function getAvailableCamera(constraints = { width: 640, height: 480 }) {
+	async function getAvailableCamera(constraints: MediaStreamConstraints) {
 		try {
 			// First, try default camera
-			const stream = await navigator.mediaDevices.getUserMedia({
-				video: constraints,
-				audio: true,
-			});
+			const stream = await navigator.mediaDevices.getUserMedia(constraints);
 			return stream;
 		} catch (err) {
 			console.warn("Default camera failed:", err);
@@ -672,7 +669,7 @@ export function useMediasoupClient(
 			}
 
 			// const stream = await navigator.mediaDevices.getUserMedia(constraints);
-			const stream = await getAvailableCamera();
+			const stream = await getAvailableCamera(constraints);
 			localStreamRef.current = stream;
 
 			if (localVideoRef.current && callType === "video") {
