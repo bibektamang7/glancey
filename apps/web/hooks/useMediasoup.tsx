@@ -14,10 +14,12 @@ import {
 	CONNECT_PRODUCER_TRANSPORT,
 	CREATE_CONSUMER_TRANSPORT,
 	CREATE_PRODUCER_TRANSPORT,
+	LEAVE_CALL,
 	REQUEST_AUDIO_CALL,
 	REQUEST_VIDEO_CALL,
 } from "socket-events";
 import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 
 interface ConsumerProps {
 	id: string;
@@ -159,12 +161,11 @@ export function useMediasoupClient(
 					await createConsumer(payload.params, payload.remoteUserId);
 					break;
 
-				case "producerClosed":
-					handleProducerClosed(payload);
-					break;
-
-				case "consumerClosed":
-					handleConsumerClosed(payload);
+				case "peerLeft":
+					if (payload.user.name) {
+						toast(`${payload.user.name} left the call.`);
+					}
+					handleUserLeft();
 					break;
 
 				case "resumed":
@@ -184,10 +185,6 @@ export function useMediasoupClient(
 							{ once: true }
 						);
 					}
-					break;
-
-				case "userLeft":
-					handleUserLeft();
 					break;
 
 				case "newProducer":
@@ -287,55 +284,6 @@ export function useMediasoupClient(
 			}
 		},
 		[socket, session.data?.user?.id]
-	);
-
-	const handleProducerClosed = useCallback(
-		(data: { producerId: string; userId: string; kind?: string }) => {
-			if (data.kind === "audio" && audioConsumer) {
-				audioConsumer.close();
-				setAudioConsumer(null);
-			} else if (data.kind === "video" && videoConsumer) {
-				videoConsumer.close();
-				setVideoConsumer(null);
-			} else if (screenConsumer) {
-				screenConsumer.close();
-				setScreenConsumer(null);
-			}
-
-			// Recreate remote stream without the closed track
-			const newStream = new MediaStream();
-			if (audioConsumer && data.kind !== "audio") {
-				newStream.addTrack(audioConsumer.track);
-			}
-			if (videoConsumer && data.kind !== "video") {
-				newStream.addTrack(videoConsumer.track);
-			}
-			if (screenConsumer && !data.kind) {
-				newStream.addTrack(screenConsumer.track);
-			}
-
-			setRemoteStream(newStream);
-			if (remoteVideoRef.current) {
-				remoteVideoRef.current.srcObject = newStream;
-			}
-		},
-		[audioConsumer, videoConsumer, screenConsumer]
-	);
-
-	const handleConsumerClosed = useCallback(
-		(data: { consumerId: string; userId: string }) => {
-			if (audioConsumer?.id === data.consumerId) {
-				audioConsumer.close();
-				setAudioConsumer(null);
-			} else if (videoConsumer?.id === data.consumerId) {
-				videoConsumer.close();
-				setVideoConsumer(null);
-			} else if (screenConsumer?.id === data.consumerId) {
-				screenConsumer.close();
-				setScreenConsumer(null);
-			}
-		},
-		[audioConsumer, videoConsumer, screenConsumer]
 	);
 
 	const handleUserLeft = useCallback(() => {
@@ -744,6 +692,18 @@ export function useMediasoupClient(
 
 	const leaveRoom = useCallback(async () => {
 		console.log("Leaving room and cleaning up...");
+
+		if (socket) {
+			socket.send(
+				JSON.stringify({
+					type: LEAVE_CALL,
+					payload: {
+						sender: session.data?.user?.id,
+						chatId: room.id,
+					},
+				})
+			);
+		}
 
 		// Close all producers
 		if (audioProducer) {

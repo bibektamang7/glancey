@@ -15,6 +15,7 @@ import {
 	LEAVE_CALL,
 	REJECT_AUDIO_CALL,
 	REJECT_INCOMING_AUDIO_CALL,
+	REJECT_INCOMING_VIDEO_CALL,
 	REQUEST_AUDIO_CALL,
 	REQUEST_VIDEO_CALL,
 	VIDEO_CALL_REJECTED,
@@ -75,6 +76,7 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 		rejectedCall: "incoming" | "request",
 		chatId: string
 	) => {
+		toast.dismiss();
 		if (socket) {
 			socket.send(
 				JSON.stringify({
@@ -91,6 +93,7 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 		}
 	};
 	const handleAudioCallAccept = (caller: User, chatId: string) => {
+		toast.dismiss();
 		setCallType("audio");
 		setRoom({
 			caller,
@@ -230,26 +233,67 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 			),
 		});
 	};
-	const handleIncomingCallJoinAccepted = (chatId: string) => {
-		//TODO: do other logics too
-		toast("Join call accepted.");
+	const handleIncomingCallJoinAccepted = (chatId: string, user: User) => {
+		toast(`📞  Video Calling from ${user.name}`, {
+			style: {
+				width: "fit-content",
+			},
+			duration: 1000 * 60,
+			description: (
+				<div className="flex items-center justify-start gap-2 text-black !mt-2 !mr-2">
+					<Avatar>
+						<AvatarImage src={user.image} />
+						<AvatarFallback>{user.name}</AvatarFallback>
+					</Avatar>
+					<div>
+						<span className="font-semibold">{user.name}</span>
+					</div>
+				</div>
+			),
+			action: (
+				<div className="flex gap-4 items-center justify-center !mt-2 !ml-4">
+					<PhoneCall
+						color="green"
+						size={16}
+						className="hover:cursor-pointer hover:bg-slate-300 hover:rounded-md"
+						onClick={() => handleVideoCallAccepted(user, chatId)}
+					/>
+					<PhoneOff
+						color="red"
+						size={16}
+						className="hover:cursor-pointer hover:bg-slate-400 hover:rounded-md"
+						onClick={() => handleRejectIncomingVideoCall(chatId)}
+					/>
+				</div>
+			),
+		});
 	};
-	const handleRejectIncomingJoinRequest = (rejectedBy: User) => {
-		//TODO: do other logics too
-		toast("Join call rejected.");
+	const handleRejectIncomingVideoCall = (chatId: string) => {
+		toast.dismiss();
+		if (socket) {
+			socket.send(
+				JSON.stringify({
+					type: REJECT_INCOMING_VIDEO_CALL,
+					payload: {
+						sender: session.data?.user?.id,
+						chatId,
+					},
+				})
+			);
+		}
 	};
-	const handleUserLeave = () => {};
+	const handleVideoCallRejected = (rejectedBy: User) => {
+		toast(`Video call rejected by ${rejectedBy.name}`);
+	};
 
+	const handleAudioCallRejected = (rejectedBy: User) => {
+		toast(`Audio call rejected by ${rejectedBy.name}`);
+	};
 	const handleSocketCallEvents = (event: MessageEvent<any>) => {
 		const message = JSON.parse(event.data);
 		const payload = message.payload;
 		switch (message.type) {
-			case LEAVE_CALL: {
-				handleUserLeave();
-				break;
-			}
 			case INCOMING_AUDIO_CALL: {
-				//TODO: need to handle call in the call, already existed chat
 				handleIncomingAudioCall(payload.chatId, payload.sender);
 				break;
 			}
@@ -262,8 +306,7 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 				break;
 			}
 			case AUDIO_CALL_REJECTED: {
-				// TODO: NOT quite sure
-				// handleIncomingCallRejected(payload.rejectedBy)
+				handleAudioCallRejected(payload.rejectedBy);
 				break;
 			}
 			case REQUEST_VIDEO_CALL: {
@@ -271,16 +314,11 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 				break;
 			}
 			case INCOMING_VIDEO_CALL: {
-				// TODO: NOT SURE as well
-				handleIncomingCallJoinAccepted(payload.chatId);
-				break;
-			}
-			case ACCEPT_VIDEO_CALL: {
-				handleRejectIncomingJoinRequest(payload.rejectedBy);
+				handleIncomingCallJoinAccepted(payload.chatId, payload.sender);
 				break;
 			}
 			case VIDEO_CALL_REJECTED: {
-				break;
+				handleVideoCallRejected(payload.rejectedBy);
 			}
 		}
 	};

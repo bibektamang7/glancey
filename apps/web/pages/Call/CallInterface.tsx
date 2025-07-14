@@ -205,8 +205,8 @@ const CallInterface = memo(
 								/>
 								<AvatarFallback>
 									{room.caller
-										? room.caller.name.charAt(0).toUpperCase()
-										: room.callTo?.name.charAt(0).toUpperCase()}
+										? room.caller.name?.charAt(0).toUpperCase()
+										: room.callTo?.name?.charAt(0).toUpperCase() || "Unknown"}
 								</AvatarFallback>
 							</Avatar>
 						</div>
