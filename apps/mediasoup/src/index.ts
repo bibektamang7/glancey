@@ -1,9 +1,15 @@
-import { createWorker } from "./worker";
+import { createRouter, createWorkers } from "./worker";
 import { createClient } from "redis-config";
 import { Room } from "./room";
 import { createWebRtcTransport } from "./createWebrtcTransport";
 import { createConsumer } from "./createConsumer";
+import dotenv from "dotenv";
 import { Peer } from "./peer";
+import os from "os";
+
+dotenv.config({
+	path: "./.env",
+});
 
 const mediaPub = createClient();
 const mediaSub = createClient();
@@ -25,6 +31,12 @@ const mediaSub = createClient();
 		.then(() => {
 			console.log("Media subscribe is connected");
 		});
+
+	let numworkers = Object.keys(os.cpus()).length;
+	if (numworkers <= 0) {
+		throw new Error("No CPU cores available to create workers");
+	}
+	await createWorkers(4); // create 4 workers, just for testing/development purposes
 })();
 
 const rooms = new Map<string, Room>();
@@ -44,32 +56,27 @@ const getOrCreateRoom = async (roomId: string) => {
 		return rooms.get(roomId);
 	}
 	try {
-		const router = await createWorker();
+		const router = await createRouter();
 		const room = new Room(roomId, router);
 		rooms.set(roomId, room);
 
 		return room;
 	} catch (error) {
-		console.log("k vao hosujfslkaf ");
+		console.error("Failed to create room:", error);
 	}
 };
 
 mediaSub.subscribe("mediasoup:getRouterRtpCapabilities", async (message) => {
 	const parsedData = JSON.parse(message);
-	//TODO: track the chat here so that when subscribe in websocket we can extract the chat
-
 	try {
 		const peer = new Peer(parsedData.userId);
-		console.log("this is peer", peer.id);
 		const room = await getOrCreateRoom(parsedData.chatId);
-		console.log("is here room", room?.id);
 		if (!room) {
 			await mediasoupError("Failed to create room", parsedData.userId);
 			return;
 		}
 		room.addPeer(peer);
 
-		console.log("published the rtp");
 		await mediaPub.publish(
 			"mediasoup:rtpCapabilities",
 			JSON.stringify({
@@ -95,9 +102,7 @@ mediaSub.subscribe("mediasoup:createProducerTransport", async (message) => {
 		const { transport, params } = await createWebRtcTransport(router);
 		const peer = room.getPeer(parsedData.userId);
 		if (!peer) return;
-		// Add producer transport in peer
 		peer.addTransport(transport);
-		console.log(peer.id, "this is peer transport");
 
 		await mediaPub.publish(
 			"mediasoup:ProducerTransportCreated",
@@ -264,6 +269,7 @@ mediaSub.subscribe("mediasoup:consume", async (message) => {
 			await mediasoupError("unable to find consumer peer", userId);
 			return;
 		}
+
 		const producer = producerPeer.getProducer(producerId);
 
 		if (!producer) {
@@ -297,12 +303,19 @@ mediaSub.subscribe("mediasoup:consume", async (message) => {
 				rtpCapabilities: consumerRes.rtpParameters,
 				type: consumerRes.type,
 				producerPaused: consumerRes.producerPaused,
+				// producerPaused: false,
 				appData: consumerRes.appData,
 			};
+			// await consumerRes.resume();
 
 			await mediaPub.publish(
 				"mediasoup:subscribed",
-				JSON.stringify({ params, userId: parsedData.userId, chatId: room.id , remoteUserId: producerUserId})
+				JSON.stringify({
+					params,
+					userId: parsedData.userId,
+					chatId: room.id,
+					remoteUserId: producerUserId,
+				})
 			);
 		}
 	} catch (error) {
@@ -313,7 +326,7 @@ mediaSub.subscribe("mediasoup:consume", async (message) => {
 
 mediaSub.subscribe("mediasoup:resume", async (message) => {
 	const parsedData = JSON.parse(message);
-	const { chatId, userId, consumerId } = parsedData;
+	const { chatId, userId, consumerId, producerUserId } = parsedData;
 
 	const room = rooms.get(chatId);
 	if (!room) {
@@ -333,6 +346,46 @@ mediaSub.subscribe("mediasoup:resume", async (message) => {
 	await consumer.resume();
 	await mediaPub.publish(
 		"mediasoup:resumed",
-		JSON.stringify({ message: "consumer resumed", userId: userId })
+		JSON.stringify({
+			message: "consumer resumed",
+			userId: userId,
+			producerUserId,
+		})
+	);
+});
+
+mediaSub.subscribe("mediasoup:leaveCall", async (message) => {
+	console.log("here come to leave call");
+	const parsedData = JSON.parse(message);
+	const { chatId, userId } = parsedData;
+	const room = rooms.get(chatId);
+	if (!room) {
+		console.log("unable to find room in leave call");
+		return;
+	}
+
+	const peer = room.getPeer(userId);
+	if (!peer) {
+		console.log("unable to find peer in the room");
+		return;
+	}
+
+	room.removePeer(userId);
+	const peers = room.getAllPeers();
+	if (peers.length === 0) {
+		console.log("no peers left in the room, deleting room");
+		rooms.get;
+		rooms.delete(chatId);
+	}
+	peer.close();
+
+
+	await mediaPub.publish(
+		"mediasoup:peerLeft",
+		JSON.stringify({
+			chatId: room.id,
+			userId: peer.id,
+			message: "peer left the call",
+		})
 	);
 });

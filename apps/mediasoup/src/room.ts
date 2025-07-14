@@ -29,6 +29,7 @@ export class Room {
 	}
 
 	close() {
+		this.router.close();
 		this.peers.clear();
 	}
 }

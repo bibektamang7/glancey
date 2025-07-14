@@ -25,6 +25,7 @@ export const createConsumer = async (
 			producerId: producer.id,
 			rtpCapabilities,
 			paused: producer.kind === "video",
+			// paused: false,
 		});
 		return consumer;
 	} catch (error) {

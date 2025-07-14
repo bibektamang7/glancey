@@ -2,92 +2,69 @@ import type { Router, Worker } from "mediasoup/types";
 import * as mediasoup from "mediasoup";
 import { config } from "./mediasoup_config";
 
-const worker: Array<{
-	worker: Worker;
-	router: Router;
-}> = [];
+const workers: Worker[] = [];
 
-let nextMediasoupWorkerIdx = 0;
+const createWorkers = async (count: number) => {
+	for (let i = 0; i < count; i++) {
+		const worker = await mediasoup.createWorker({
+			logLevel: "debug",
+			logTags: ["info", "ice", "dtls", "rtcp", "rtp", "srtp"],
+			rtcMinPort: 10000,
+			rtcMaxPort: 10100,
+		});
 
-const withTimeout = <T>(promise: Promise<T>, timeoutMs = 20000): Promise<T> =>
-	Promise.race([
-		promise,
-		new Promise<T>((_, reject) =>
-			setTimeout(
-				() => reject(new Error("Timeout while creating router")),
-				timeoutMs
-			)
-		),
-	]);
-
-const createWorker = async () => {
-	const worker = await mediasoup.createWorker({
-		logLevel: "debug",
-		logTags: ["info", "ice", "dtls", "rtcp", "rtp", "srtp"],
-	});
-
-	worker.on("died", () => {
-		console.log("wy not here");
-		console.error(
-			"Mediasoup worker died, exiting in 2 seconds... [pid:&d]",
-			worker.pid
-		);
-		setTimeout(() => {
+		worker.on("died", () => {
+			console.error(
+				"Mediasoup worker died, exiting in 2 seconds... [pid:&d]",
+				worker.pid
+			);
+			setTimeout(() => {
+				process.exit(1);
+			}, 2000);
+		});
+		worker.on("@failure", (fail) => {
+			console.error("mediasoup worker failed", fail.message);
 			process.exit(1);
-		}, 2000);
-	});
-	worker.on("@failure", (fail) => {
-		console.log("are we inside failure");
-		console.error("mediasoup worker failed", fail.message);
-		process.exit(1);
-	});
+		});
+		workers.push(worker);
+		console.log(`Created mediasoup worker ${i + 1} with PID ${worker.pid}`);
+	}
+};
+let nextWorkerIndex = 0;
 
-	// const mediaCodecs = config.mediasoup.router.mediaCodecs;
-	console.log("are we here");
-
-	console.log("this is wokrer p id", worker.pid);
-	console.log("is worker close", worker.closed);
-	// await withTimeout(
-	// 	worker.createRouter({
-	// 		mediaCodecs: [
-	// 			{
-	// 				kind: "audio",
-	// 				mimeType: "audio/opus",
-	// 				clockRate: 48000,
-	// 				channels: 2,
-	// 			},
-	// 			// {
-	// 			// 	kind: "video",
-	// 			// 	mimeType: "video/VP8",
-	// 			// 	clockRate: 90000,
-	// 			// 	parameters: {
-	// 			// 		"x-google-start-bitrate": 300,
-	// 			// 	},
-	// 			// },
-	// 		],
-	// 	})
-	// );
-	const router = await worker.createRouter({
-		mediaCodecs: [
-			{
-				kind: "audio",
-				mimeType: "audio/opus",
-				clockRate: 48000,
-				channels: 2,
-			},
-			{
-				kind: "video",
-				mimeType: "video/VP8",
-				clockRate: 90000,
-				parameters: {
-					"x-google-start-bitrate": 300,
-				},
-			},
-		],
-	});
-	console.log("this is router", router.id);
-
-	return router;
+const getNextWorker = () => {
+	if (workers.length === 0) {
+		throw new Error("No workers available");
+	}
+	const worker = workers[nextWorkerIndex];
+	nextWorkerIndex = (nextWorkerIndex + 1) % workers.length;
+	return worker;
 };
 
-export { createWorker };
+const createRouter = async () => {
+	try {
+		const worker = getNextWorker();
+
+		if (!worker) {
+			throw new Error("No available worker to create router");
+		}
+		worker.observer.on("close", () => {
+			console.log(`Worker ${worker.pid} closed`);
+			workers.splice(workers.indexOf(worker), 1);
+		});
+
+		const mediaCodecs = config.mediasoup.router.mediaCodecs;
+		const router = await worker.createRouter({
+			mediaCodecs: mediaCodecs,
+		});
+
+		router.observer.on("close", () => {
+			console.log(`this router is closed ${router.id}`);
+		});
+		return router;
+	} catch (error: any) {
+		throw new Error("Failed to create router:", error.message);
+	}
+};
+
+export { createRouter, createWorkers };

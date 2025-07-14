@@ -36,16 +36,14 @@ export const config = {
 		// Webrtctransport setting
 		webRtcTransport: {
 			listenIps: [
-				{ ip: "0.0.0.0", announcedIp: "127.0.0.1" },
+				{
+					ip: "0.0.0.0",
+					announcedIp: "127.0.0.1",
+					portRange: { min: 40000, max: 49999 },
+				},
 			] as TransportListenInfo[],
 			maxIncomeBitrate: 1500000,
 			initialAvailableOutgoingBitrate: 1000000,
 		},
 	},
-};
-export const webRtcTransportOptions = {
-	listenIps: [{ ip: "0.0.0.0", announcedIp: "127.0.0.1" }],
-	enableUdp: true,
-	enableTcp: true,
-	preferUdp: true,
 };
