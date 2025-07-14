@@ -17,18 +17,18 @@ const websocketHandle: WebSocketHandler<SocketData> = {
 			ws.data.user.name
 		);
 		userManager.addUser(socketUser);
+		console.log("user connected", ws.data.user.id);
 	},
 	message(ws, message) {
 		handleMessage(ws, message);
 	},
-	close(ws, code, reason) {
+	close(ws) {
 		const socketUser = userManager.getUser(ws.data.user.id);
 		if (socketUser) {
 			userManager.removeUser(socketUser);
 			chatManager.removeUserFromChat(socketUser);
 		}
-		console.log("socket close code: ", code);
-		console.log("socket close reason", reason);
+		console.log("user connection lost", ws.data.user.id);
 	},
 
 	perMessageDeflate: true,

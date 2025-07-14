@@ -6,12 +6,14 @@ export class Chat {
 	private participants: Set<User>;
 	public currentParticipantsInCall: Set<User>;
 	private producers: Map<string, string[]>;
+	producersConsumedUsers: Set<string>;
 	constructor(chatId: string, admin: User) {
 		this.chatId = chatId;
 		this.admin = admin;
 		this.participants = new Set();
 		this.currentParticipantsInCall = new Set();
 		this.producers = new Map();
+		this.producersConsumedUsers = new Set();
 	}
 	addProducer({ userId, producerId }: { userId: string; producerId: string }) {
 		if (!this.producers.has(userId)) {
@@ -38,6 +40,9 @@ export class Chat {
 	}
 	removeParticipantFromCall(user: User) {
 		this.currentParticipantsInCall.delete(user);
+		this.producers.delete(user.getUserId());
+		this.producersConsumedUsers.delete(user.getUserId());
+
 		if (this.currentParticipantsInCall.values.length < 2) {
 			this.currentParticipantsInCall = new Set();
 		}
@@ -72,7 +77,7 @@ export class Chat {
 class ChatManager {
 	private static instance: ChatManager | undefined;
 	private chats: Map<string, Chat>;
-	public userChatMapping: Map<string, string>;
+	public userChatMapping: Map<string, string[]>;
 	constructor() {
 		this.chats = new Map();
 		this.userChatMapping = new Map();
@@ -87,7 +92,7 @@ class ChatManager {
 		const chat = new Chat(chatId, admin);
 		chat.addParticipant(admin);
 		this.chats.set(chatId, chat);
-		this.userChatMapping.set(adminId, chatId);
+		this.userChatMapping.set(adminId, [chatId]);
 		return chat;
 	}
 	getChat(chatId: string) {
@@ -102,13 +107,18 @@ class ChatManager {
 	}
 	removeUserFromChat(user: User) {
 		const userId = user.getUserId();
-		const chatId = this.userChatMapping.get(userId);
-		if (chatId) {
-			const chat = this.getChat(chatId);
-			chat?.removeParticipant(user);
-			const participants = chat?.getParticipants();
-			if (participants?.values.length === 0) {
-				this.deleteChat(chatId);
+		const chatsId = this.userChatMapping.get(userId);
+		if (chatsId && chatsId.length > 0) {
+			for (let i = 0; i < chatsId.length; i++) {
+				const chatId = chatsId[i];
+				const chat = this.getChat(chatId!);
+				if (chat) {
+					const participants = chat.getParticipants();
+					chat.removeParticipantFromCall(user);
+					if (participants.values.length === 0) {
+						this.deleteChat(chat.chatId);
+					}
+				}
 			}
 		}
 		this.userChatMapping.delete(userId);

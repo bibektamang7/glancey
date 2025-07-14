@@ -123,7 +123,8 @@ interface UserInfo {
 
 const extractUserInfo = (users: User[], currentUserId: string) => {
 	const infos = users.reduce((acc: UserInfo[], currentUser) => {
-		if (currentUserId !== currentUser.userId) {
+		const location = currentUser.getLocation();
+		if (currentUserId !== currentUser.userId && location) {
 			const info = {
 				id: currentUser.userId,
 				name: currentUser.name,

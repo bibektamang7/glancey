@@ -16,7 +16,6 @@ const socketSubClient = createClient();
 })();
 
 socketSubClient.subscribe("mediasoup:rtpCapabilities", (message) => {
-	console.log("here it comes for capabilites");
 	const messageFromMediaSoup = JSON.parse(message);
 	const senderUser = userManager.getUser(messageFromMediaSoup.userId);
 	if (senderUser) {
@@ -101,18 +100,22 @@ socketSubClient.subscribe("mediasoup:produced", async (message) => {
 			.getProducers()
 			.filter((p) => p.userId !== socketUser.userId);
 
-		for (const producer of existingProducers) {
-			socketUser.getSocket().send(
-				JSON.stringify({
-					type: "newProducer",
-					payload: {
-						chatId: chat.chatId,
-						producerId: producer.producerId,
-						userId: producer.userId,
-						senderUserId: producer.userId,
-					},
-				})
-			);
+		if (!chat.producersConsumedUsers.has(socketUser.userId)) {
+			for (const producer of existingProducers) {
+				if (producer.userId === socketUser.userId) continue;
+				socketUser.getSocket().send(
+					JSON.stringify({
+						type: "newProducer",
+						payload: {
+							chatId: chat.chatId,
+							producerId: producer.producerId,
+							userId: producer.userId,
+							senderUserId: producer.userId,
+						},
+					})
+				);
+			}
+			chat.producersConsumedUsers.add(socketUser.userId);
 		}
 		chat.addProducer({
 			userId: socketUser.userId,
@@ -186,6 +189,7 @@ socketSubClient.subscribe("mediasoup:resumed", async (message) => {
 				type: "resumed",
 				payload: {
 					message: parsedData.message,
+					producerUserId: parsedData.producerUserId,
 				},
 			})
 		);
@@ -205,5 +209,36 @@ socketSubClient.subscribe("mediasoup:error", async (message) => {
 				},
 			})
 		);
+	}
+});
+
+socketSubClient.subscribe("mediasoup:peerLeft", async (message) => {
+	const parsedData = JSON.parse(message);
+	const socketUser = userManager.getUser(parsedData.userId);
+	if (socketUser) {
+		const chat = chatManager.getChat(parsedData.chatId);
+		if (chat) {
+			chat.broadcastInCall(
+				JSON.stringify({
+					type: "peerLeft",
+					payload: {
+						chatId: chat.chatId,
+						user: {
+							id: socketUser.userId,
+							name: socketUser.name,
+							image: socketUser.getImage(),
+						},
+					},
+				}),
+				socketUser.userId
+			);
+
+			chat.removeParticipantFromCall(socketUser);
+
+			console.log(
+				chat.currentParticipantsInCall,
+				"this is current participants in call"
+			);
+		}
 	}
 });

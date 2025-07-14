@@ -28,6 +28,7 @@ import {
 	RESUME_TRANSPORT,
 	SEND_MESSAGE_IN_CHAT,
 	SET_INTERESTS_AND_LOCATION,
+	VIDEO_CALL_ACCEPTED,
 	VIDEO_CALL_REJECTED,
 } from "socket-events";
 import type { SocketData } from "../src";
@@ -164,24 +165,18 @@ export const handleMessage = async (
 				const chat = chatManager.getChat(payload.chatId);
 
 				if (chat) {
-					const socketUserId = senderUser.getUserId();
-					chat.removeParticipant(senderUser);
-					chat.broadcastMessage(
+					socketPubClient.publish(
+						"mediasoup:leaveCall",
 						JSON.stringify({
-							type: LEAVE_CALL,
-							payload: {
-								chatId: chat.chatId,
-								leftUserId: senderUser.userId,
-							},
-						}),
-						socketUserId
+							chatId: payload.chatId,
+							userId: senderUser.userId,
+						})
 					);
 				}
 			}
 			break;
 
 		case REQUEST_AUDIO_CALL: {
-			console.log("here is come calling request");
 			const chat = chatManager.getChat(payload.chatId);
 			if (senderUser && chat) {
 				chat.addParticipantInCall(senderUser);
@@ -234,46 +229,13 @@ export const handleMessage = async (
 			);
 			break;
 		}
-		case ACCEPT_INCOMING_AUDIO_CALL: {
-			const acceptedTo = userManager.getUser(payload.acceptedTo);
-			const chat = chatManager.getChat(payload.chatId);
-			if (!chat || !acceptedTo) return;
-			//TODO: EXECUTE GETTING RTP CAPABILITES
-
-			//TODO: FOR MULTIPLE USER,
-			// it is not feasible,
-			// so later when you want to handle for multiple caller,
-			// send getRtpCapabilities, when initiate call
-
-			acceptedTo.getSocket().send(
-				JSON.stringify({
-					type: AUDIO_CALL_ACCEPTED,
-					payload: {
-						chatId: chat.chatId,
-						acceptedBy: {
-							id: senderUser.getUserId(),
-							image: senderUser.getImage(),
-							name: senderUser.name,
-						},
-					},
-				})
-			);
-			await socketPubClient.publish(
-				"mediasoup:getRouterRtpCapabilities",
-				JSON.stringify({
-					chatId: chat.chatId,
-					userId: senderUser.userId,
-				})
-			);
-			break;
-		}
 		case ACCEPT_AUDIO_CALL: {
 			const chat = chatManager.getChat(payload.chatId);
-			const acceptedUser = userManager.getUser(payload.acceptedBy);
-			if (!chat || !acceptedUser) return;
-			chat.addParticipantInCall(acceptedUser);
-
-			acceptedUser.getSocket().send(
+			console.log("yata tw sure aaunu parne ho what happened");
+			console.log("chat is chat this hai", payload.chat, chat);
+			if (!chat || !senderUser) return;
+			chat.addParticipantInCall(senderUser);
+			chat.broadcastInCall(
 				JSON.stringify({
 					type: AUDIO_CALL_ACCEPTED,
 					payload: {
@@ -284,8 +246,10 @@ export const handleMessage = async (
 							name: senderUser.name,
 						},
 					},
-				})
+				}),
+				senderUser.userId
 			);
+
 			await socketPubClient.publish(
 				"mediasoup:getRouterRtpCapabilities",
 				JSON.stringify({
@@ -392,45 +356,25 @@ export const handleMessage = async (
 			break;
 		}
 
-		case ACCEPT_INCOMING_VIDEO_CALL: {
-			const chat = chatManager.getChat(payload.chatId);
-			const acceptedUser = userManager.getUser(payload.acceptedTo);
-			if (!chat || !acceptedUser) return;
-
-			acceptedUser.getSocket().send(
-				JSON.stringify({
-					type: ACCEPT_VIDEO_CALL,
-					payload: {
-						chatId: chat.chatId,
-						acceptedBy: senderUser.userId,
-					},
-				})
-			);
-
-			await socketPubClient.publish(
-				"mediasoup:getRouterRtpCapabilities",
-				JSON.stringify({
-					chatId: chat.chatId,
-					userId: senderUser.userId,
-				})
-			);
-			break;
-		}
 		case ACCEPT_VIDEO_CALL: {
 			const chat = chatManager.getChat(payload.chatId);
-
-			const acceptedUser = userManager.getUser(payload.acceptedTo);
-			if (!chat || !acceptedUser) return;
-
-			acceptedUser.getSocket().send(
+			if (!chat || !senderUser) return;
+			chat.addParticipantInCall(senderUser);
+			chat.broadcastInCall(
 				JSON.stringify({
-					type: ACCEPT_VIDEO_CALL,
+					type: VIDEO_CALL_ACCEPTED,
 					payload: {
 						chatId: chat.chatId,
-						acceptedBy: senderUser.userId,
+						acceptedBy: {
+							id: senderUser.getUserId(),
+							image: senderUser.getImage(),
+							name: senderUser.name,
+						},
 					},
-				})
+				}),
+				senderUser.userId
 			);
+
 			await socketPubClient.publish(
 				"mediasoup:getRouterRtpCapabilities",
 				JSON.stringify({
@@ -502,7 +446,6 @@ export const handleMessage = async (
 		}
 		case CONNECT_PRODUCER_TRANSPORT: {
 			// send dtlsParameters comes from client
-
 			const chat = chatManager.getChat(payload.chatId);
 			if (chat) {
 				await socketPubClient.publish(
@@ -511,6 +454,7 @@ export const handleMessage = async (
 						userId: senderUser.userId,
 						dtlsParameters: payload.dtlsParameters,
 						chatId: chat.chatId,
+						transportId: payload.transportId,
 					})
 				);
 			}
@@ -570,9 +514,10 @@ export const handleMessage = async (
 					JSON.stringify({
 						chatId: chat.chatId,
 						userId: senderUser.userId,
-						rtpCapabilities: payload.rtpCapabilites,
+						rtpCapabilities: payload.rtpCapabilities,
 						transportId: payload.transportId,
 						producerId: payload.producerId,
+						producerUserId: payload.consumerUserId,
 					})
 				);
 			}
@@ -580,10 +525,12 @@ export const handleMessage = async (
 		}
 		case RESUME_TRANSPORT: {
 			const chat = chatManager.getChat(payload.chatId);
+			console.log("yeta chat aayo hola hoina");
 			if (chat) {
 				await socketPubClient.publish(
 					"mediasoup:resume",
 					JSON.stringify({
+						producerUserId: payload.producerUserId,
 						userId: senderUser.userId,
 						chatId: chat.chatId,
 						consumerId: payload.consumerId,
