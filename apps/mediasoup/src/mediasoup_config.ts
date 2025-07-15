@@ -4,7 +4,6 @@ import type {
 	WorkerLogLevel,
 	WorkerLogTag,
 } from "mediasoup/types";
-import os from "os";
 
 export const config = {
 	listenIp: "0.0.0.0",

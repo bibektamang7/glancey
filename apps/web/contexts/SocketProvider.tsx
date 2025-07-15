@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-const SocketContext = createContext({});
+const SocketContext = createContext<{
+	socket: WebSocket | null;
+}>({
+	socket: null,
+});
 
 export const useSocket = () => {
 	const ctx = useContext(SocketContext);

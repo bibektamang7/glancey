@@ -25,7 +25,7 @@ enum Interest {
   Reading
   Running
   Technology
-  other
+  Other
 }
 
 enum Professions {
@@ -42,7 +42,7 @@ enum Professions {
   Film_Maker
   Photographer
   Farmer
-  other
+  Other
 }
 
 model User {
@@ -50,7 +50,7 @@ model User {
   name       String
   email      String       @unique
   image      String
-  interests  Interest[]   @map("other")
+  interests  Interest[]   @map("Other")
   aboutMe    String?
   createdAt  DateTime     @default(now())
   profession Professions?
