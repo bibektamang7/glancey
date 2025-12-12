@@ -3,8 +3,7 @@
 Glancy is an innovative, location-aware communication platform designed to connect users who are physically near each other. It enables real-time messaging, audio calls, and video calls with users in your immediate vicinity, creating a truly localized social experience.
 
 ## Demo
-
-![Demo Video](https://github.com/user-attachments/assets/90493e0e-796a-4c47-877e-4162024ceedf)
+https://github.com/user-attachments/assets/90493e0e-796a-4c47-877e-4162024ceedf
 
 ## Features
 
