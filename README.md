@@ -4,7 +4,7 @@ Glancy is an innovative, location-aware communication platform designed to conne
 
 ## Demo
 
-![Demo Video](https://github.com/user-attachments/assets/662d2b94-7a52-4184-92b9-2a7a1d68a010)
+![Demo Video](https://github.com/user-attachments/assets/90493e0e-796a-4c47-877e-4162024ceedf)
 
 ## Features
 
