@@ -295,6 +295,7 @@ export function World(props: WorldProps) {
 		<Canvas
 			// scene={scene}
 			// camera={new PerspectiveCamera(50, aspect, 180, 1800)}
+			className="dark bg-black"
 			camera={{
 				fov: 50,
 				position: [0, 0, props.cameraZ.get()],

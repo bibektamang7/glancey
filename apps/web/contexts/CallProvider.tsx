@@ -120,7 +120,7 @@ const CallProvider = ({ children }: { children: React.ReactNode }) => {
 
 			actionButtonStyle: { backgroundColor: "var(--color-blue-500)" },
 			action: (
-				<div className="flex gap-2 items-center justify-center !mt-2">
+				<div className="flex gap-2 items-center justify-center mt-2!">
 					<PhoneCall
 						color="green"
 						size={16}

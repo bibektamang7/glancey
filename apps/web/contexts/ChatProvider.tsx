@@ -97,8 +97,39 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 					sender: payload.sender,
 				} as Message;
 				const chat = chats.find((chat) => chat.id === payload.chatId);
-				console.log("this is chat", chat);
+				toast("🔖 New message", {
+					style: {
+						width: "fit-content",
+					},
+					description: (
+						<div className="flex items-center justify-start gap-2 mt-2! text-black">
+							<Avatar>
+								<AvatarImage src={payload.sender.image} />
+								<AvatarFallback>{payload.sender.name}</AvatarFallback>
+							</Avatar>
+							<div>
+								<p className="font-semibold">{payload.sender.name}</p>
+								<span className="font-light text-slate-700 line-clamp-2">
+									{message.content}
+								</span>
+							</div>
+						</div>
+					),
+					actionButtonStyle: { backgroundColor: "var(--color-blue-500)" },
+					action: {
+						label: "Open",
+						onClick: () => {
+							setOpenChat({
+								isChatOpen: true,
+								user: payload.sender,
+								chatId: payload.chatId,
+							});
+						},
+					},
+				});
+
 				if (!chat) {
+					console.log("is that message inside")
 					const newChat = {
 						id: payload.chatId,
 						lastMessage: message,
@@ -107,37 +138,6 @@ const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 						participants: [payload.sender],
 					} as Chat;
 					setChats((prev) => [...prev, newChat]);
-
-					toast("🔖 New message", {
-						style: {
-							width: "fit-content",
-						},
-						description: (
-							<div className="flex items-center justify-start gap-2 !mt-2 text-black">
-								<Avatar>
-									<AvatarImage src={payload.sender.image} />
-									<AvatarFallback>{payload.sender.name}</AvatarFallback>
-								</Avatar>
-								<div>
-									<p className="font-semibold">{payload.sender.name}</p>
-									<span className="font-light text-slate-700 line-clamp-2">
-										{message.content}
-									</span>
-								</div>
-							</div>
-						),
-						actionButtonStyle: { backgroundColor: "var(--color-blue-500)" },
-						action: {
-							label: "Open",
-							onClick: () => {
-								setOpenChat({
-									isChatOpen: true,
-									user: payload.sender,
-									chatId: payload.chatId,
-								});
-							},
-						},
-					});
 				} else {
 					setChats((prev) =>
 						prev.map((chat) =>

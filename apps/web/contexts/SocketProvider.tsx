@@ -1,3 +1,5 @@
+"use client";
+import { useSession } from "next-auth/react";
 import { createContext, useContext, useEffect, useState } from "react";
 
 const SocketContext = createContext<{
@@ -11,7 +13,7 @@ export const useSocket = () => {
 	return ctx;
 };
 
-const SOCKET_URL = process.env.SOCKET_URL;
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL;
 
 const handleUserOnline = () => {
 	const isUserOnline = navigator.onLine;
@@ -21,11 +23,16 @@ const handleUserOnline = () => {
 };
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
+	const session = useSession();
 	const [socket, setSocket] = useState<WebSocket | null>(null);
 	useEffect(() => {
-		if (!socket) {
+		if (!socket && session) {
 			//need token, and location data
-			const socketInstance = new WebSocket(`${SOCKET_URL}`);
+			// if () return;
+			if (!session.data || !session.data.accessToken) return;
+			const socketInstance = new WebSocket(
+				`${SOCKET_URL}?token=${session.data?.accessToken}`
+			);
 			socketInstance.onopen = () => {
 				console.log("Socket connection open");
 			};

@@ -45,6 +45,8 @@ const server = Bun.serve({
 		}
 		const user = getUserFromToken(token);
 		if (!user) return new Response("Invalid token", { status: 403 });
+
+		console.log("yeah its here");
 		const success = server.upgrade(req, {
 			data: {
 				user,

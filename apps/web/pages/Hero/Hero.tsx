@@ -6,6 +6,7 @@ import { Globe, MapPin, MessageCircle, Shield, Users, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spotlight } from "@/components/ui/spotlight";
 import { globeConfig, sampleArcs, sectionVariant } from "@/data/Hero";
+import Link from "next/link";
 
 const World = dynamic(
 	() => import("@/components/ui/globe").then((m) => m.World),
@@ -79,7 +80,7 @@ const Hero = () => {
 			>
 				<motion.div
 					style={{ right: globeRight, width: globeWidth, left: globeLeft }}
-					className="fixed right-0 top-0 !w-full h-screen hidden lg:block z-10"
+					className="!bg-black fixed right-0 top-0 !w-full h-screen hidden lg:block z-10"
 				>
 					<World
 						globeConfig={globeConfig}
@@ -126,12 +127,14 @@ const Hero = () => {
 								transition={{ duration: 0.8, delay: 0.6 }}
 								className="flex flex-col sm:flex-row gap-4 "
 							>
-								<Button className="bg-blue-800 hover:bg-blue-700 text-white !px-8 py-3">
-									Get Started
-								</Button>
+								<Link href={"/login"}>
+									<Button className="bg-blue-800 hover:bg-blue-700 text-white !px-8 py-3 hover:cursor-pointer">
+										Get Started
+									</Button>
+								</Link>
 								<Button
 									variant="outline"
-									className="border-gray-600 text-gray-300 hover:bg-gray-800 !px-8 py-3"
+									className="border-gray-600 text-gray-300 hover:bg-gray-800 !px-8 py-3 hover:cursor-pointer"
 								>
 									Learn More
 								</Button>
@@ -251,7 +254,7 @@ const Hero = () => {
 							>
 								<div className="bg-gray-800/50 rounded-xl border border-gray-700 !p-4">
 									<div className="flex items-center space-x-3 gap-2">
-										<Globe className="w-4 h-4 text-green-400" />
+										<Globe className="w-4 h-4 " />
 										<h3 className="text-lg font-semibold text-white tracking-tighter leading-tight">
 											Global Infrastructure
 										</h3>
@@ -291,7 +294,7 @@ const Hero = () => {
 											Lightning Fast
 										</h3>
 									</div>
-									<p className="text-gray-300 tracking-tight !mt-2">
+									<p className="text-gray-300 tracking-tight mt-2">
 										Optimized algorithms for instant user discovery and message
 										delivery. Connect with nearby users in milliseconds.
 									</p>
@@ -344,9 +347,11 @@ const Hero = () => {
 						transition={{ duration: 1 }}
 						className="flex flex-col sm:flex-row gap-4 justify-center"
 					>
-						<Button className="bg-blue-700 text-white !px-12 py-4 hover:cursor-pointer">
-							Download App
-						</Button>
+						<Link href={"/login"}>
+							<Button className="bg-blue-700 text-white !px-12 py-4 hover:cursor-pointer">
+								Get started
+							</Button>
+						</Link>
 						<Button
 							variant="outline"
 							className="border-gray-600 text-black hover:bg-slate-300 hover:cursor-pointer !px-12 py-4"

@@ -5,7 +5,7 @@ export const sectionVariant = {
 		opacity: 1,
 		transition: {
 			duration: 0.6,
-			ease: "easeInOut",
+			// ease: "easeInOut",
 			staggerChildren: 0.2,
 		},
 	},
@@ -13,7 +13,7 @@ export const sectionVariant = {
 		opacity: 0,
 		transition: {
 			duration: 0.4,
-			ease: "easeInOut",
+			// ease: "easeInOut",
 		},
 	},
 };

@@ -19,7 +19,6 @@ export async function POST(req: NextRequest) {
 				{ status: 400 }
 			);
 		}
-		console.log("what abut somehting here", requestData.interests);
 		await prismaClient.user.update({
 			where: { id: session.user.id },
 			data: {
